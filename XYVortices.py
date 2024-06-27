@@ -7,6 +7,9 @@ from matplotlib import pyplot as plt
 import time 
 
 
+data_directory = "../../data/"
+
+
 
 def genThetas(L,T,ntimes,J=1.,dt = .05):
 	"""Generates a sequence of angles for a given system size, temperature, number of time steps, Josephson coupling (default is 1.) and time step size (default is 5% J)"""
@@ -39,23 +42,72 @@ def calcOP(thetas):
 
 	return OP
 
+### Computes instantaneous magnetic field noise at NV location given an instantenous profile for the theta field
+def calc_NV_noise(z,thetas):
+
+	### First we extract the vorticity field 
+	vorticity = np.zeros_like(thetas)
+
+	for k in range(L*L):
+		x = k//L
+		y = k % L
+		vorticity[x,y] = ( np.mod(np.thetas[(x+1)//L,y] - thetas[x,y],2.*np.pi) 
+			+np.mod( thetas[(x+1)//L,(y+1)//L] - thetas[(x+1)//L,y],2.*np.pi) 
+			+np.mod( thetas[x,(y+1)//L] - thetas[(x+1)//L,(y+1)//L],2.*np.pi) 
+			+np.mod( thetas[x,y] - thetas[x,(y+1)//L],2.*np.pi) )
+
+
+	### Now that we have vorticity we take FFT 
+	fft_vort = np.fft.fft2(vorticity)
+
+	### Now we apply the NV filter function 
+	nv_filter_func = np.zeros_like(fft_vort)
+	qs = np.fft.fft2freqs(vorticity)
+
+	for qx in range(L):
+		for qy in range(L):
+			nv_filter_func[x,y] = 0.5 * np.exp(-z*np.sqrt(qs[x,y][0]**2 + qs[x,y][1]**2))/np.sqrt(qs[x,y][0]**2 + qs[x,y][1]**2 + 0.0001*qs[0,0][0]**2)
+
+	return np.sum(nv_filter_func*fft_vort)
+
+
+
+
+
+
 
 def main():
 
-	L = 50### Lattice size -- LxL lattice
-	T = .7*.89 ### Literature says BKT transition is at approximately .89 J 
+	save_data = False
+	data_directory = "../../data/"
 
-	nburn = 5000### Time steps we burn initially to equilibrate
-	ntimes = 3000### Number of times steps we calculate and measure for
+
+	L = 50### Lattice size -- LxL lattice
+
+	num_temps = 20
+	temps = np.linspace(0.1,5.,num_temps)
+
+	nburn = 1000### Time steps we burn initially to equilibrate
+	ntimes = 4000### Number of times steps we calculate and measure for
 
 	ti = time.time()
 
-	thetas = genThetas(L,T,nburn+ntimes)
+	ops = np.zeros(num_temps,dtype=complex)
+
+	for i in range(num_temps):
+		thetas = genThetas(L,temps[i],nburn+ntimes)
+
+		ops[i] = np.mean(calcOP(thetas)[nburn:])
+
 
 	tf = time.time()
 	print("Elapsed total time: ",tf-ti,"s")
 
-	np.save("thetas.npy",thetas)
+	if save_data:
+		np.save(data_directory+"thetas.npy",thetas)
+
+	plt.plot(temps,np.abs(ops))
+	plt.show()
 
 
 
