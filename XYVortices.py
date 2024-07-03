@@ -87,7 +87,7 @@ def main():
 	num_temps = 20
 	temps = np.linspace(0.1,5.,num_temps)
 
-	nburn = 1000### Time steps we burn initially to equilibrate
+	nburn = 5000### Time steps we burn initially to equilibrate
 	ntimes = 4000### Number of times steps we calculate and measure for
 
 	ti = time.time()
