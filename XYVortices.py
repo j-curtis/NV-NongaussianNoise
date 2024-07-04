@@ -20,17 +20,16 @@ def gen_burned_thetas(L,T,nburn,J=1.,dt = .05):
 	tmp = np.zeros_like(thetas)
 
 	for nt in range(1,nburn):
-		for k in range(L*L):
-			x = k//L
-			y = k % L
-			tmp[x,y] =  - J*dt*(
-				np.sin( thetas[x,y] - thetas[(x+1)//L,y]) 
-				+np.sin( thetas[x,y] - thetas[x-1,y]) 
-				+np.sin( thetas[x,y] - thetas[x,(y+1)//L]) 
-				+np.sin( thetas[x,y] - thetas[x,y-1])
-				)
+		for x in range(L):
+			for y in range(L):
+				tmp[x,y] =  - J*dt*(
+					np.sin( thetas[x,y] - thetas[(x+1)//L,y] ) 
+					+np.sin( thetas[x,y] - thetas[x-1,y] ) 
+					+np.sin( thetas[x,y] - thetas[x,(y+1)//L] ) 
+					+np.sin( thetas[x,y] - thetas[x,y-1] )
+					)
+		
 		thetas += tmp
-
 		thetas +=  np.random.normal(0.,2.*T*dt,size=(L,L))
 
 	return thetas
@@ -46,43 +45,16 @@ def calc_OP(thetas):
 def calc_vort(thetas):
 	vorticity = np.zeros_like(thetas)
 
-	for k in range(L*L):
-		x = k//L
-		y = k % L
-		vorticity[x,y] = ( np.mod(np.thetas[(x+1)//L,y] - thetas[x,y],2.*np.pi) 
-			+np.mod( thetas[(x+1)//L,(y+1)//L] - thetas[(x+1)//L,y],2.*np.pi) 
-			+np.mod( thetas[x,(y+1)//L] - thetas[(x+1)//L,(y+1)//L],2.*np.pi) 
-			+np.mod( thetas[x,y] - thetas[x,(y+1)//L],2.*np.pi) )
+	L = thetas.shape[0]
+
+	for x in range(L):
+		for y in range(L):
+			vorticity[x,y] = ( np.fmod(thetas[(x+1)//L,y] - thetas[x,y],2.*np.pi) 
+				+np.fmod(thetas[(x+1)//L,(y+1)//L] - thetas[(x+1)//L,y],2.*np.pi) 
+				+np.fmod(thetas[x,(y+1)//L] - thetas[(x+1)//L,(y+1)//L],2.*np.pi) 
+				+np.fmod(thetas[x,y] - thetas[x,(y+1)//L],2.*np.pi) )
 
 	return vorticity
-
-### Computes instantaneous magnetic field noise at NV location given an instantenous profile for the theta field
-def calc_NV_noise(z,thetas):
-
-	### First we extract the vorticity field 
-	vorticity = np.zeros_like(thetas)
-
-	for k in range(L*L):
-		x = k//L
-		y = k % L
-		vorticity[x,y] = ( np.mod(np.thetas[(x+1)//L,y] - thetas[x,y],2.*np.pi) 
-			+np.mod( thetas[(x+1)//L,(y+1)//L] - thetas[(x+1)//L,y],2.*np.pi) 
-			+np.mod( thetas[x,(y+1)//L] - thetas[(x+1)//L,(y+1)//L],2.*np.pi) 
-			+np.mod( thetas[x,y] - thetas[x,(y+1)//L],2.*np.pi) )
-
-
-	### Now that we have vorticity we take FFT 
-	fft_vort = np.fft.fft2(vorticity)
-
-	### Now we apply the NV filter function 
-	nv_filter_func = np.zeros_like(fft_vort)
-	qs = np.fft.fft2freqs(vorticity)
-
-	for qx in range(L):
-		for qy in range(L):
-			nv_filter_func[x,y] = 0.5 * np.exp(-z*np.sqrt(qs[x,y][0]**2 + qs[x,y][1]**2))/np.sqrt(qs[x,y][0]**2 + qs[x,y][1]**2 + 0.0001*qs[0,0][0]**2)
-
-	return np.sum(nv_filter_func*fft_vort)
 
 
 
@@ -92,9 +64,9 @@ def main():
 	data_directory = "../../data/"
 
 
-	L = 40 ### Lattice size -- LxL lattice
+	L = 10 ### Lattice size -- LxL lattice
 
-	ntemps = 4
+	ntemps = 5
 	temps = np.linspace(0.1,4.,ntemps)
 
 	nburn = 10000### Time steps we burn initially to equilibrate
@@ -106,18 +78,15 @@ def main():
 
 	for i in range(ntemps):
 		thetas = gen_burned_thetas(L,temps[i],nburn)
-
 		ops[i] = calc_OP(thetas)
 		vorticity[i,:,:] = calc_vort(thetas)
-
+		plt.imshow(vorticity[i,:,:])
+		plt.colorbar()
+		plt.title(r'$T=$'+str(temps[i]))
+		plt.show()
 
 	tf = time.time()
 	print("Elapsed total time: ",tf-ti,"s")
-
-	for i in range(ntemps):
-		plt.imshow(vorticity[i,:,:])
-		plt.colorbar()
-		plt.show()
 
 	if save_data:
 		np.save(data_directory+"thetas.npy",thetas)
