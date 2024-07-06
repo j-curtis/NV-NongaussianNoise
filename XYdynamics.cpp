@@ -7,6 +7,8 @@
 #include <complex>
 #include <string>
 
+#include <fftw3.h>
+
 using namespace std;
 
 const double pi = 3.14159265358979323846;
@@ -28,22 +30,16 @@ std::string bool2str(bool tf){
 int main() {
 
 	//Simulation parameters
-	const size_t L = 80; //Lattice size
-	const size_t ntimes = 500000; //Number of time steps (run once to burn in then again to capture dynamics)
-	int nburn = 100000; //We don't need to burn for an entire sample time
+	const size_t L = 10; //Lattice size
+	const size_t ntimes = 5000; //Number of time steps (run once to burn in then again to capture dynamics)
+	int nburn = 1000; //We don't need to burn for an entire sample time
 	nburn = std::min(int(ntimes), nburn);
 	double T = 0.5*J; //Temperature
 
-	//Correlation function parameters
-	int Ns = 500; //Number of points we sample the random vorticity in order to compute the ensemble average 
-	//Note this will end up being the number of succesful samples we make 
-
-	const size_t ndt = 1; //Number of delay-time time steps we evaluate the correlation function for
-
-	std::cout<<"dt = "<<dt<<", L = "<<L<<", nburn = "<<nburn<<", ntimes = "<<ntimes<<", T/J = "<<T<<", Nsample = "<<Ns<<", ndt out = "<<ndt<<std::endl;
+	std::cout<<"dt = "<<dt<<", L = "<<L<<", nburn = "<<nburn<<", ntimes = "<<ntimes<<", T/J = "<<T<<std::endl;
 
 	//File I/O flags
-	const bool vort_out = true; //If this is true we write out the vorticity itself
+	const bool vort_out = false; //If this is true we write out the vorticity itself
 
 	//Start timer
    	int t0 = std::time(NULL);
@@ -53,10 +49,7 @@ int main() {
   	std::default_random_engine generator (seed);
   	std::normal_distribution<double> normal(0.0,sqrt(2.*T*dt)); //Random noise for stochastic evolution
 
-  	std::uniform_int_distribution<int> timept(0,ntimes - ndt - 1); //Random time point for correlation function sampling procedure
-  	std::uniform_int_distribution<int> spacept(0,L-1); //Random spatial point (one ordinate/abscissa) for correlation function sampling procedure 
-
-  	//Allocate array of theta(t,x) 
+	//Allocate array of theta(t,x) 
    	std::vector<std::vector<std::vector<double> > > thetas(ntimes, std::vector<std::vector<double> >(L, std::vector<double>(L) ) );
 	
 	//BURN LOOP
@@ -121,7 +114,6 @@ int main() {
 	std::cout<<"Capture loop done: "<<std::to_string(t2-t1)<<"s"<<std::endl;
 
 	//EXTRACT VORTICITY
-	//We probably only need to compute this Nsample times unless we want the full stochastic evolution
 	//We now compute the time-traces of the vorticity
 	//We define the vorticity for a site r such that v(r) = (theta(r+x)-theta(r))mod 2pi + (theta(r+x+y)-theta(r+x))mod 2pi  +(theta(r+y)-theta(r+x+y))mod 2pi  +(theta(r)-theta(r+y))mod 2pi 
    	std::vector<std::vector<std::vector<double> > > vort(ntimes, std::vector<std::vector<double> >(L, std::vector<double>(L) ) );
@@ -163,6 +155,25 @@ int main() {
 		std::cout<<"vort_out loop done: "<<std::to_string(t2-t1)<<"s"<<std::endl;
 	}
 	
+
+	//FFT OF VORTICITY ROUTINE
+	//This will compute the spatial FFT of the vorticity
+	//This uses the FFTW library
+	//First we must allocate the arrays and make the FFT plan
+	fftw_complex* fft_result = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*L*L);
+
+	double* data_in; //Will be an array which points to a time slice of vorticity data and will be stored in flattened array format
+
+	fftw_plan p = fftw_plan_dft_r2c_2d(L,L,data_in,fft_result,FFTW_ESTIMATE);
+
+	fftw_destroy_plan(p);
+	fftw_free(data_in);
+	fftw_free(fft_result);
+
+
+
+
+
 	int tf = std::time(NULL);
 	std::cout<<"All done: "<<(tf-t0)<<"s"<<std::endl;
 
