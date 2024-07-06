@@ -26,6 +26,16 @@ std::string bool2str(bool tf){
 	}
 }
 
+//FFT OF VORTICITY ROUTINE
+//This will compute the spatial FFT of the vorticity
+//This uses the FFTW library
+void perform_fft(double * data_in, fftw_complex* result, int L){
+
+	fftw_plan p = fftw_plan_dft_r2c_2d(L,L,data_in,result,FFTW_ESTIMATE);
+	fftw_execute(p);
+	fftw_destroy_plan(p);
+}
+
 
 int main() {
 
@@ -154,25 +164,28 @@ int main() {
 		t2 = std::time(NULL);
 		std::cout<<"vort_out loop done: "<<std::to_string(t2-t1)<<"s"<<std::endl;
 	}
-	
 
-	//FFT OF VORTICITY ROUTINE
-	//This will compute the spatial FFT of the vorticity
-	//This uses the FFTW library
+
+	//FFT ROUTINE
+	//We must allocate and destroy the objects externally
 	//First we must allocate the arrays and make the FFT plan
 	fftw_complex* fft_result = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*L*L);
 
-	double* data_in; //Will be an array which points to a time slice of vorticity data and will be stored in flattened array format
+	//Now we loop through time steps and compute the fft data for each time step
+	for(int nt = 0; nt < ntimes; nt++){
+		//First we need to convert the std::vector type to a double array 
+		double temp[L*L];
+		for(int x =0; x < L; x++){
+				for(int y = 0; y < L; y++){
+					int indx = x + L*y;
+					temp[indx] = vort[nt][x][y];
+				}
+			}
+		perform_fft(temp,fft_result,L);
+	}
 
-	fftw_plan p = fftw_plan_dft_r2c_2d(L,L,data_in,fft_result,FFTW_ESTIMATE);
 
-	fftw_destroy_plan(p);
-	fftw_free(data_in);
 	fftw_free(fft_result);
-
-
-
-
 
 	int tf = std::time(NULL);
 	std::cout<<"All done: "<<(tf-t0)<<"s"<<std::endl;
