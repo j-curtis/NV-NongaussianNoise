@@ -44,12 +44,13 @@ int main() {
 	const size_t ntimes = 5000; //Number of time steps (run once to burn in then again to capture dynamics)
 	int nburn = 1000; //We don't need to burn for an entire sample time
 	nburn = std::min(int(ntimes), nburn);
-	double T = 0.5*J; //Temperature
+	double T = 0.8*J; //Temperature
 
 	std::cout<<"dt = "<<dt<<", L = "<<L<<", nburn = "<<nburn<<", ntimes = "<<ntimes<<", T/J = "<<T<<std::endl;
 
 	//File I/O flags
-	const bool vort_out = false; //If this is true we write out the vorticity itself
+	const std::string dataDirectory = "../data/";
+	const bool vort_out = true; //If this is true we write out the vorticity itself
 
 	//Start timer
    	int t0 = std::time(NULL);
@@ -149,7 +150,7 @@ int main() {
 	if(vort_out){
 		t1 = std::time(NULL);
 		std::ofstream outfile;
-		string fname = "./vorticity_L=" + std::to_string(L)+"_t="+std::to_string(ntimes)+"_T="+std::to_string(T)+".csv";
+		string fname = dataDirectory+"vorticity_L=" + std::to_string(L)+"_t="+std::to_string(ntimes)+"_T="+std::to_string(T)+".csv";
 		outfile.open(fname);
 
 		for(int nt = 0; nt < ntimes; nt++){
