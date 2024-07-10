@@ -75,16 +75,19 @@ def load_csv(fname):
 
 
 ### This method will take the spatial vorticity profile and compute the filtered FFT at a depth z (accepts an array of distances z)
-### vorticity is assumed to be a single time slice and is LxL
+### vorticity is assumed to be an NtxLxL array of all time slices 
 def fft_filtered(vorticity,z_list):
 
 	### First we extract how many z points we will be computing for 
 	num_zs = len(z_list)
 
+	num_ts = vorticity.shape[0]
+	L = vorticity.shape[1]
+
 	### We will need FFT only once for all z points
 	### We compute here 
 	### We compute the real fft but insist it have the same output shape as the input array, for convenience
-	fft = np.fft.rfft2(data,s=vorticity.shape)
+	ffts = np.fft.fft2(vorticity,axes=(-1,-2))
 
 	### We also need the corresponding momentum space points to compute the filters 
 	### This also is needed only once for all z points
@@ -94,25 +97,30 @@ def fft_filtered(vorticity,z_list):
 	filter_funcs = np.zeros((num_zs,L,L))
 
 	### Output array for filtered FFT at each distance z in the list 
-	out = np.zeros((num_zs,L,L),dtype=complex)
+	out = np.zeros((num_ts,num_zs),dtype=complex)
 
-	for nz in range(num_zs):
-		z = z_list[nz]
+	for nt in range(num_ts):
+		for nz in range(num_zs):
+			z = z_list[nz]
 
-		for nx in range(L):
-			for ny in range(L):
-				q = np.sqrt(qs[nx]**2 + qs[ny]**2)
-			
-				filter_funcs[nz,nx,ny] = np.exp(-2.*z*q)/(2.*q + .00001)**2 ### For q -> 0 we shift slightly, it should be ultimately suppressed anyways
+			for nx in range(L):
+				for ny in range(L):
+					q = np.sqrt(qs[nx]**2 + qs[ny]**2)
+				
+					filter_funcs[nz,nx,ny] = np.exp(-2.*z*q)/(2.*q + .00001)**2 ### For q -> 0 we shift slightly, it should be ultimately suppressed anyways
 
-		out[nz,:,:] = fft*filter_funcs[nz,:,:]
+			### We now need to sum over all the momenta to reduce the output down to just the distance-dependent time-dependent field 
+			### We use the mean so that we essentially normalize by the number of momentum points -- I think this will correspond to the integral in continuum
+			out[nt,nz] = np.mean(ffts[nt,:,:]*filter_funcs[nz,:,:])
 
+	### Now 
 
 	return out
 
 
 def main():
 
+	t0 = time.time()
 	z_list = np.array([1.,3.,10.,30.,100.,300.,1000.,3000.])
 
 	data_directory = "../data/"
@@ -124,8 +132,10 @@ def main():
 
 	for data in data_files:
 
-		for nt in range(len(data.shape[0])):
-			bfield_z = fft_filtered(data[nt,:,:],z_list)
+		field_vs_t_z = fft_filtered(data,z_list)
+
+	tf = time.time()
+	print("Total time: ",tf-t0,"s")
 
 if __name__ == "__main__":
 	main()
