@@ -40,11 +40,11 @@ void perform_fft(double * data_in, fftw_complex* result, int L){
 int main() {
 
 	//Simulation parameters
-	const size_t L = 10; //Lattice size
+	const size_t L = 30; //Lattice size
 	const size_t ntimes = 5000; //Number of time steps (run once to burn in then again to capture dynamics)
-	int nburn = 1000; //We don't need to burn for an entire sample time
+	int nburn = 5000; //We don't need to burn for an entire sample time
 	nburn = std::min(int(ntimes), nburn);
-	double T = 0.8*J; //Temperature
+	double T = 1.5*J; //Temperature
 
 	std::cout<<"dt = "<<dt<<", L = "<<L<<", nburn = "<<nburn<<", ntimes = "<<ntimes<<", T/J = "<<T<<std::endl;
 
@@ -183,6 +183,14 @@ int main() {
 				}
 			}
 		perform_fft(temp,fft_result,L);
+
+		//Now we store the output of the FFT for processing
+		for(int qx =0; qx < L; qx++){
+				for(int qy = 0; qy < L/1+1; qy++){
+					std::complex<double> fft_complex(fft_result[qx*(L/2+1) + qy][0] , fft_result[qx*(L/2+1) + qy][1]);
+					//std::cout<<"Bin: "<<to_string(qx)<<", "<<to_string(qy)<<" "<<z<<std::endl;
+				}
+			}
 	}
 
 

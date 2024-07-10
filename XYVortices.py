@@ -9,7 +9,6 @@ import time
 
 data_directory = "../../data/"
 
-
 ### Function which will accept simulation parameters and return a thermalized initial state
 def gen_burned_thetas(L,T,nburn,J=1.,dt = .05):
 	"""Generates a sequence of angles for a given system size, temperature, number of time steps, Josephson coupling (default is 1.) and time step size (default is 5% J)"""
@@ -58,44 +57,45 @@ def calc_vort(thetas):
 
 
 
+### HERE IS A SET OF FUNCTIONS FOR PROCESSING VORTICITY PROFILES FROM C++ SIMULATIONS
+
+### This method returns a numpy data file obtained from reading a csv file of the format of LxL doubles per line with each line a time step 
+def load_csv(fname):
+
+	data = np.genfromtxt(fname+".csv",delimiter=" ")
+
+	nt = data.shape[0]
+	L = int(np.sqrt(data.shape[1]))
+
+	data = data.reshape(nt,L,L)
+
+	return data
+
+
+### This method will perform an fft on the vorticity data 
+### vorticity is assumed to be a single time slice and is LxL
+def fft_vorticity(vorticity):
+	
+	fft_out = np.fft.fft2(data)
+	return fft_out
+
+	
 def main():
 
-	save_data = False
-	data_directory = "../../data/"
-
-
-	L = 10 ### Lattice size -- LxL lattice
-
-	ntemps = 5
-	temps = np.linspace(0.1,4.,ntemps)
-
-	nburn = 10000### Time steps we burn initially to equilibrate
-
-	ti = time.time()
-
-	ops = np.zeros(ntemps,dtype=complex)
-	vorticity = np.zeros((ntemps,L,L))
-
-	for i in range(ntemps):
-		thetas = gen_burned_thetas(L,temps[i],nburn)
-		ops[i] = calc_OP(thetas)
-		vorticity[i,:,:] = calc_vort(thetas)
-		plt.imshow(vorticity[i,:,:])
-		plt.colorbar()
-		plt.title(r'$T=$'+str(temps[i]))
-		plt.show()
-
-	tf = time.time()
-	print("Elapsed total time: ",tf-ti,"s")
-
-	if save_data:
-		np.save(data_directory+"thetas.npy",thetas)
-
-	plt.plot(temps,np.abs(ops))
-	plt.show()
 
 
 
 if __name__ == "__main__":
 	main()
+
+
+
+
+
+
+
+
+
+
+
 
