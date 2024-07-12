@@ -10,24 +10,45 @@ import time
 ### THESE METHODS ARE FOR RUNNING SIMULATION IN PYTHON
 #######################################
 
+### This will be a vectorizeable implementation of the lattice derivative needed often 
+### Specifically it will return the sum sum_{k in nn of j} sin(theta_k - theta_j)
+def compact_lattice_derivative(thetas):
+	dtheta_px = np.roll(thetas,1,axis=0) - thetas
+	dtheta_mx = np.roll(thetas,-1,axis=0) - thetas 
+	dtheta_py = np.roll(thetas,1,axis=1) - thetas 
+	dtheta_my = np.roll(thetas,-1,axis=1) - thetas
+
+	return np.sin(dtheta_px) + np.sin(dtheta_mx) + np.sin(dtheta_py) + np.sin(dtheta_my) 
+
+
 ### Function which will accept simulation parameters and return a thermalized initial state
 def gen_burned_thetas(L,T,nburn,J=1.,dt = .1):
 	"""Generates a sequence of angles for a given system size, temperature, number of time steps, Josephson coupling (default is 1.) and time step size (default is 5% J)"""
 	### Uses periodic boundary conditions
-	### default time step is 5% of J
 
 	thetas = np.zeros((L,L))
 	for nt in range(1,nburn):
-		dtheta_px = np.roll(thetas,1,axis=0) - thetas
-		dtheta_mx = np.roll(thetas,-1,axis=0) - thetas 
-		dtheta_py = np.roll(thetas,1,axis=1) - thetas 
-		dtheta_my = np.roll(thetas,-1,axis=1) - thetas
-		
-		thetas += J*dt*np.sin(dtheta_px) + J*dt*np.sin(dtheta_mx) + J*dt*np.sin(dtheta_py) + J*dt*np.sin(dtheta_my) 
-		thetas += np.random.normal(0.,2.*T*dt,size=(L,L))
+		thetas += J*dt*compact_lattice_derivative(thetas) + np.random.normal(0.,2.*T*dt,size=(L,L))
 
 	return thetas
 	
+
+### This function generates a simulation which is a set of time-traces of theta for a given set of parameters
+### The returned field theta will be a large array of shape 
+### Nsample x Ntimes x L x L 
+### The definition of the samples is that each sampled configuration has the same burned in initial condition
+def run_sim(L,T,nburn,nsample,ntimes,J=1.,dt=0.1):
+
+	out = np.zeros((nsample,ntimes,L,L))
+	for ns in range(nsample):
+
+		### Initialize the dynamics for each sampling to be the same burned in configuration
+		out[ns,0,:,:] = gen_burned_thetas(L,T,nburn,J,dt)
+
+		for nt in range(1,ntimes):
+			out[ns,nt,:,:] = out[ns,nt-1,:,:] + J*dt*compact_lattice_derivative(out[ns,nt-1,...]) + np.random.normal(0.,2.*T*dt,size=(L,L))
+
+	return out
 
 ### Given a time-slice value of thetas[x,y] this returns the spatial average of the order parameter 
 def calc_OP(thetas):
@@ -42,19 +63,19 @@ def calc_vort(thetas):
 
 	tmp1 = thetas
 	tmp2 = np.roll(tmp1,1,axis=0)
-	out += np.fmod(tmp2-tmp1,np.pi) 
+	out += np.fmod(tmp2-tmp1,2.*np.pi) 
 	
 	tmp1 = tmp2
 	tmp2 = np.roll(tmp1,1,axis=1)
-	out += np.fmod(tmp2-tmp1,np.pi) 
+	out += np.fmod(tmp2-tmp1,2.*np.pi) 
 	
 	tmp1 = tmp2 
 	tmp2 = np.roll(tmp1,-1,axis=0)
-	out += np.fmod(tmp2-tmp1,np.pi)
+	out += np.fmod(tmp2-tmp1,2.*np.pi)
 	
 	tmp1 = tmp2
 	tmp2 = np.roll(tmp1,-1,axis=1)
-	out += np.fmod(tmp2-tmp1,np.pi)
+	out += np.fmod(tmp2-tmp1,2.*np.pi)
 
 #	L = thetas.shape[0]
 #
@@ -155,28 +176,20 @@ def process_files():
 
 
 def main():
-	L = 30
-	nburn = 10000
-	ntemps = 10
-	temps = np.linspace(0.1,2.1,ntemps)
-	ops = np.zeros(ntemps)
-	vort = np.zeros((ntemps,L,L))
+
+	L = 50
+	T = 0.7
+	nburn = 1000
+	nsample = 100
+	ntimes = 100 
 	
 	t0 = time.time()
-	for nt in range(len(temps)):
-		thetas = gen_burned_thetas(L,temps[nt],nburn)
-		ops[nt] = calc_OP(thetas)
-		vort[nt,:,:] = calc_vort(thetas)
-		plt.imshow(vort[nt,:,:])
-		plt.colorbar()
-		plt.show()
-		
+
+	thetas = run_sim(L,T,nburn,nsample,ntimes)
+
 		
 	t1 = time.time()
 	print(t1-t0,"s")
-	
-	plt.plot(temps,ops)
-	plt.show()
 
 if __name__ == "__main__":
 	main()
