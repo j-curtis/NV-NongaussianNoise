@@ -11,33 +11,41 @@ import time
 #######################################
 
 ### Function which will accept simulation parameters and return a thermalized initial state
-def gen_burned_thetas(L,T,nburn,J=1.,dt = .05):
+def gen_burned_thetas(L,T,nburn,J=1.,dt = .1):
 	"""Generates a sequence of angles for a given system size, temperature, number of time steps, Josephson coupling (default is 1.) and time step size (default is 5% J)"""
 	### Uses periodic boundary conditions
-	### defaul time step is 5% of J
+	### default time step is 5% of J
 
 	thetas = np.zeros((L,L))
-	tmp = np.zeros_like(thetas)
-
 	for nt in range(1,nburn):
-		for x in range(L):
-			for y in range(L):
-				tmp[x,y] =  - J*dt*(
-					np.sin( thetas[x,y] - thetas[(x+1)//L,y] ) 
-					+np.sin( thetas[x,y] - thetas[x-1,y] ) 
-					+np.sin( thetas[x,y] - thetas[x,(y+1)//L] ) 
-					+np.sin( thetas[x,y] - thetas[x,y-1] )
-					)
+		dtheta_px = np.roll(thetas,1,axis=0) - thetas
+		dtheta_mx = np.roll(thetas,-1,axis=0) - thetas 
+		dtheta_py = np.roll(thetas,1,axis=1) - thetas 
+		dtheta_my = np.roll(thetas,-1,axis=1) - thetas
 		
-		thetas += tmp
-		thetas +=  np.random.normal(0.,2.*T*dt,size=(L,L))
+		thetas += J*dt*np.sin(dtheta_px) + J*dt*np.sin(dtheta_mx) + J*dt*np.sin(dtheta_py) + J*dt*np.sin(dtheta_my) 
+		thetas += np.random.normal(0.,2.*T*dt,size=(L,L))
+	
+	
+#		for x in range(L):
+#			for y in range(L):
+#				tmp[x,y] =  - J*dt*(
+#					np.sin( thetas[x,y] - thetas[(x+1)%L,y] ) 
+#					+np.sin( thetas[x,y] - thetas[x-1,y] ) 
+#					+np.sin( thetas[x,y] - thetas[x,(y+1)%L] ) 
+#					+np.sin( thetas[x,y] - thetas[x,y-1] )
+#					)
+#		
+#		thetas += tmp
+#		thetas +=  np.random.normal(0.,2.*T*dt,size=(L,L))
 
 	return thetas
+	
 
 ### Given a time-slice value of thetas[x,y] this returns the spatial average of the order parameter 
 def calc_OP(thetas):
 	"""Calculates the spatial average of order parameter over space"""
-	OP = np.mean(np.exp(1.j*thetas),axis=(-1,-2))
+	OP = np.abs(np.mean(np.exp(1.j*thetas),axis=(-1,-2)))
 
 	return OP
 
@@ -49,10 +57,10 @@ def calc_vort(thetas):
 
 	for x in range(L):
 		for y in range(L):
-			vorticity[x,y] = ( np.fmod(thetas[(x+1)//L,y] - thetas[x,y],2.*np.pi) 
-				+np.fmod(thetas[(x+1)//L,(y+1)//L] - thetas[(x+1)//L,y],2.*np.pi) 
-				+np.fmod(thetas[x,(y+1)//L] - thetas[(x+1)//L,(y+1)//L],2.*np.pi) 
-				+np.fmod(thetas[x,y] - thetas[x,(y+1)//L],2.*np.pi) )
+			vorticity[x,y] = ( np.fmod(thetas[(x+1)%L,y] - thetas[x,y],2.*np.pi) 
+				+np.fmod(thetas[(x+1)%L,(y+1)%L] - thetas[(x+1)%L,y],2.*np.pi) 
+				+np.fmod(thetas[x,(y+1)%L] - thetas[(x+1)%L,(y+1)%L],2.*np.pi) 
+				+np.fmod(thetas[x,y] - thetas[x,(y+1)%L],2.*np.pi) )
 
 	return vorticity
 
@@ -113,12 +121,10 @@ def fft_filtered(vorticity,z_list):
 			### We use the mean so that we essentially normalize by the number of momentum points -- I think this will correspond to the integral in continuum
 			out[nt,nz] = np.mean(ffts[nt,:,:]*filter_funcs[nz,:,:])
 
-	### Now 
-
 	return out
 
 
-def main():
+def process_files():
 
 	t0 = time.time()
 	z_list = np.array([1.,3.,10.,30.,100.,300.,1000.,3000.])
@@ -136,6 +142,22 @@ def main():
 
 	tf = time.time()
 	print("Total time: ",tf-t0,"s")
+
+
+def main():
+	L = 80
+	nburn = 100000
+	temps = np.linspace(0.1,2.1,10)
+	ops = np.zeros_like(temps)
+	t0 = time.time()
+	for nt in range(len(temps)):
+		ops[nt] = calc_OP(gen_burned_thetas(L,temps[nt],nburn))
+		
+	t1 = time.time()
+	print(t1-t0,"s")
+	
+	plt.plot(temps,ops)
+	plt.show()
 
 if __name__ == "__main__":
 	main()
