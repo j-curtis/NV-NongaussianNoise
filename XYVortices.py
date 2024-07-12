@@ -51,18 +51,34 @@ def calc_OP(thetas):
 
 ### Given a time-slice of values of thetas[x,y] this returns the vorticity density 
 def calc_vort(thetas):
-	vorticity = np.zeros_like(thetas)
+	out = np.zeros_like(thetas)
 
-	L = thetas.shape[0]
+	tmp1 = thetas
+	tmp2 = np.roll(tmp1,1,axis=0)
+	out += np.fmod(tmp2-tmp1,2.*np.pi) 
+	
+	tmp1 = tmp2
+	tmp2 = np.roll(tmp1,1,axis=1)
+	out += np.fmod(tmp2-tmp1,2.*np.pi) 
+	
+	tmp1 = tmp2 
+	tmp2 = np.roll(tmp1,-1,axis=0)
+	out += np.fmod(tmp2-tmp1,2.*np.pi)
+	
+	tmp1 = tmp2
+	tmp2 = np.roll(tmp1,-1,axis=1)
+	out += np.fmod(tmp2-tmp1,2.*np.pi)
 
-	for x in range(L):
-		for y in range(L):
-			vorticity[x,y] = ( np.fmod(thetas[(x+1)%L,y] - thetas[x,y],2.*np.pi) 
-				+np.fmod(thetas[(x+1)%L,(y+1)%L] - thetas[(x+1)%L,y],2.*np.pi) 
-				+np.fmod(thetas[x,(y+1)%L] - thetas[(x+1)%L,(y+1)%L],2.*np.pi) 
-				+np.fmod(thetas[x,y] - thetas[x,(y+1)%L],2.*np.pi) )
+#	L = thetas.shape[0]
+#
+#	for x in range(L):
+#		for y in range(L):
+#			vorticity[x,y] = ( np.fmod(thetas[(x+1)%L,y] - thetas[x,y],2.*np.pi) 
+#				+np.fmod(thetas[(x+1)%L,(y+1)%L] - thetas[(x+1)%L,y],2.*np.pi) 
+#				+np.fmod(thetas[x,(y+1)%L] - thetas[(x+1)%L,(y+1)%L],2.*np.pi) 
+#				+np.fmod(thetas[x,y] - thetas[x,(y+1)%L],2.*np.pi) )
 
-	return vorticity
+	return out
 
 
 #######################################
@@ -145,13 +161,22 @@ def process_files():
 
 
 def main():
-	L = 80
-	nburn = 100000
-	temps = np.linspace(0.1,2.1,10)
-	ops = np.zeros_like(temps)
+	L = 30
+	nburn = 10000
+	ntemps = 10
+	temps = np.linspace(0.1,2.1,ntemps)
+	ops = np.zeros(ntemps)
+	vort = np.zeros((ntemps,L,L))
+	
 	t0 = time.time()
 	for nt in range(len(temps)):
-		ops[nt] = calc_OP(gen_burned_thetas(L,temps[nt],nburn))
+		thetas = gen_burned_thetas(L,temps[nt],nburn)
+		ops[nt] = calc_OP(thetas)
+		vort[nt,:,:] = calc_vort(thetas)
+		plt.imshow(vort[nt,:,:])
+		plt.colorbar()
+		plt.show()
+		
 		
 	t1 = time.time()
 	print(t1-t0,"s")
