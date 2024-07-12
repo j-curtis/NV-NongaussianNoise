@@ -25,19 +25,6 @@ def gen_burned_thetas(L,T,nburn,J=1.,dt = .1):
 		
 		thetas += J*dt*np.sin(dtheta_px) + J*dt*np.sin(dtheta_mx) + J*dt*np.sin(dtheta_py) + J*dt*np.sin(dtheta_my) 
 		thetas += np.random.normal(0.,2.*T*dt,size=(L,L))
-	
-	
-#		for x in range(L):
-#			for y in range(L):
-#				tmp[x,y] =  - J*dt*(
-#					np.sin( thetas[x,y] - thetas[(x+1)%L,y] ) 
-#					+np.sin( thetas[x,y] - thetas[x-1,y] ) 
-#					+np.sin( thetas[x,y] - thetas[x,(y+1)%L] ) 
-#					+np.sin( thetas[x,y] - thetas[x,y-1] )
-#					)
-#		
-#		thetas += tmp
-#		thetas +=  np.random.normal(0.,2.*T*dt,size=(L,L))
 
 	return thetas
 	
@@ -55,19 +42,19 @@ def calc_vort(thetas):
 
 	tmp1 = thetas
 	tmp2 = np.roll(tmp1,1,axis=0)
-	out += np.fmod(tmp2-tmp1,2.*np.pi) 
+	out += np.fmod(tmp2-tmp1,np.pi) 
 	
 	tmp1 = tmp2
 	tmp2 = np.roll(tmp1,1,axis=1)
-	out += np.fmod(tmp2-tmp1,2.*np.pi) 
+	out += np.fmod(tmp2-tmp1,np.pi) 
 	
 	tmp1 = tmp2 
 	tmp2 = np.roll(tmp1,-1,axis=0)
-	out += np.fmod(tmp2-tmp1,2.*np.pi)
+	out += np.fmod(tmp2-tmp1,np.pi)
 	
 	tmp1 = tmp2
 	tmp2 = np.roll(tmp1,-1,axis=1)
-	out += np.fmod(tmp2-tmp1,2.*np.pi)
+	out += np.fmod(tmp2-tmp1,np.pi)
 
 #	L = thetas.shape[0]
 #
@@ -140,13 +127,7 @@ def fft_filtered(vorticity,z_list):
 	return out
 
 
-<<<<<<< HEAD
-
-
-def main():
-=======
 def process_files():
->>>>>>> a2b84aa2e5599966cc480877d550f23d91cf111f
 
 	t0 = time.time()
 	z_list = np.array([1.,3.,10.,30.,100.,300.])
