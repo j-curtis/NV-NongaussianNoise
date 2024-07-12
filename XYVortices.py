@@ -118,13 +118,15 @@ def fft_filtered(vorticity,z_list):
 	return out
 
 
+
+
 def main():
 
 	t0 = time.time()
-	z_list = np.array([1.,3.,10.,30.,100.,300.,1000.,3000.])
+	z_list = np.array([1.,3.,10.,30.,100.,300.])
 
 	data_directory = "../data/"
-	files = ["vorticity_L=30_t=5000_T=1.500000"]
+	files = ["vorticity_L=30_t=5000_T=1.500000","vorticity_L=50_t=20000_T=1.500000"]
 
 	paths = [data_directory + file for file in files]
 
@@ -133,6 +135,13 @@ def main():
 	for data in data_files:
 
 		field_vs_t_z = fft_filtered(data,z_list)
+
+		plt.plot(field_vs_t_z[:,0])
+		plt.show()
+		plt.plot(field_vs_t_z[:,2])
+		plt.show()
+		plt.plot(field_vs_t_z[:,4])
+		plt.show()
 
 	tf = time.time()
 	print("Total time: ",tf-t0,"s")

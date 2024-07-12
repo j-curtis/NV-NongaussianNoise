@@ -40,8 +40,8 @@ void perform_fft(double * data_in, fftw_complex* result, int L){
 int main() {
 
 	//Simulation parameters
-	const size_t L = 30; //Lattice size
-	const size_t ntimes = 5000; //Number of time steps (run once to burn in then again to capture dynamics)
+	const size_t L = 50; //Lattice size
+	const size_t ntimes = 20000; //Number of time steps (run once to burn in then again to capture dynamics)
 	int nburn = 5000; //We don't need to burn for an entire sample time
 	nburn = std::min(int(ntimes), nburn);
 	double T = 1.5*J; //Temperature
