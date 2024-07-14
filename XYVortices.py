@@ -81,9 +81,36 @@ def run_sim(L,T,nburn,nsample,ntimes,J=1.,dt=0.1):
 
 	return out, vort_out
 
+
+#######################################
+### THESE METHODS ARE FOR PROCESSING VORTICITY DATA AND ARE SUITABLE FOR BOTH PYTHON OR C++ OUTPUTS 
+#######################################
+
+### This method generates the NV filter function for the passed list of distances 
+
+def gen_NV_mask(L,z_list):
+
+	### First we extract how many z points we will be computing for 
+	nzs = len(z_list)
+
+	### We also need the corresponding momentum space points to compute the filters 
+	q_list = np.linspace(0.,2.*np.pi,L)
+
+	qx = np.outer(q_list,np.ones(L))
+	qy = np.outer(np.ones(L),q_list)
+
+	q = np.sqrt(qx*qx + qy*qy)
+
+	### Now we compute the filter functions, which has one for each z point we want 
+	NV_masks = np.zeros((nzs,L,L),dtype=complex)
+	NV_masks = np.exp(-np.tensordot(z_list, q, axes=-1) )/(2.*np.tensordot(np.ones(nzs), q,axes=-1))
+	NV_masks[:,0,0] = 0.
+
+
+	return NV_masks
+
 ### Given a simulation of the vorticity dynamics this will compute the NV magnetic field for the given distances 
 def NV_field(vorticity,z_list):
-
 	### First we extract how many z points we will be computing for 
 	nzs = len(z_list)
 
@@ -106,7 +133,7 @@ def NV_field(vorticity,z_list):
 	out = np.zeros((nsamples,ntimes,nzs),dtype=complex)
 
 	out = np.mean(ffts * filter_funcs,axes=(-1,-2))
-	
+
 	return out
 
 
@@ -204,6 +231,19 @@ def main():
 	nsample = 1000
 	ntimes = 200 
 	
+	z_list = np.array([1.,3.,10.,30.,100.,300.])
+
+	nv_masks = np.real(gen_NV_mask(L,z_list))
+
+	print(nv_masks.shape)
+
+	for n in range(len(z_list)):
+		plt.imshow(np.log(nv_masks[n,:,:]))
+		plt.colorbar()
+		plt.show()
+
+	quit()
+
 	t0 = time.time()
 
 	thetas, vorts = run_sim(L,T,nburn,nsample,ntimes)
