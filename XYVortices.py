@@ -40,10 +40,12 @@ def gen_burned_thetas(L,T,nburn,J=1.,dt = .1):
 def run_sim(L,T,nburn,nsample,ntimes,J=1.,dt=0.1):
 
 	out = np.zeros((nsample,ntimes,L,L))
+	### Each sample is taken with the same burned in initial configuration and different realization of noise for ensuing dynamics
+	initial_configuation = gen_burned_thetas(L,T,nburn,J,dt)
+
 	for ns in range(nsample):
 
-		### Initialize the dynamics for each sampling to be the same burned in configuration
-		out[ns,0,:,:] = gen_burned_thetas(L,T,nburn,J,dt)
+		out[ns,0,:,:] = initial_configuation
 
 		for nt in range(1,ntimes):
 			out[ns,nt,:,:] = out[ns,nt-1,:,:] + J*dt*compact_lattice_derivative(out[ns,nt-1,...]) + np.random.normal(0.,2.*T*dt,size=(L,L))
@@ -177,15 +179,22 @@ def process_files():
 
 def main():
 
-	L = 50
+	L = 30
 	T = 0.7
-	nburn = 1000
-	nsample = 100
-	ntimes = 100 
+	nburn = 3000
+	nsample = 2000
+	ntimes = 1000 
 	
 	t0 = time.time()
 
 	thetas = run_sim(L,T,nburn,nsample,ntimes)
+	op_correlation = np.zeros(ntimes,dtype=complex)
+
+	for n in range(nsample):
+		op_correlation += np.exp(1.j*(thetas[n,:,0,0]-thetas[n,0,0,0]))/float(nsample)
+
+	plt.plot(np.abs(op_correlation))
+	plt.show()
 
 		
 	t1 = time.time()
