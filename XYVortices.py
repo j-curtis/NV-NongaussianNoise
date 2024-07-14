@@ -36,21 +36,22 @@ def gen_burned_thetas(L,T,nburn,J=1.,dt = .1):
 ### This function generates a simulation which is a set of time-traces of theta for a given set of parameters
 ### The returned field theta will be a large array of shape 
 ### Nsample x Ntimes x L x L 
-### The definition of the samples is that each sampled configuration has the same burned in initial condition
+### We also return the vorticity profile of the simulations 
 def run_sim(L,T,nburn,nsample,ntimes,J=1.,dt=0.1):
 
 	out = np.zeros((nsample,ntimes,L,L))
-	### Each sample is taken with the same burned in initial configuration and different realization of noise for ensuing dynamics
-	initial_configuation = gen_burned_thetas(L,T,nburn,J,dt)
+	vort_out = np.zeros((nsample,ntimes,L,L))
 
 	for ns in range(nsample):
-
-		out[ns,0,:,:] = initial_configuation
+		### Every sample has a different initial condition and should therefore improve the independence of the distribution 
+		out[ns,0,...] = gen_burned_thetas(L,T,nburn,J,dt)
+		vort_out[ns,0,...] = calc_vort(out[ns,0,...])
 
 		for nt in range(1,ntimes):
-			out[ns,nt,:,:] = out[ns,nt-1,:,:] + J*dt*compact_lattice_derivative(out[ns,nt-1,...]) + np.random.normal(0.,2.*T*dt,size=(L,L))
+			out[ns,nt,...] = out[ns,nt-1,...] + J*dt*compact_lattice_derivative(out[ns,nt-1,...]) + np.random.normal(0.,2.*T*dt,size=(L,L))
+			vort_out[ns,nt,...] = calc_vort(out[ns,nt,...])
 
-	return out
+	return out, vort_out
 
 ### Given a time-slice value of thetas[x,y] this returns the spatial average of the order parameter 
 def calc_OP(thetas):
@@ -79,17 +80,59 @@ def calc_vort(thetas):
 	tmp2 = np.roll(tmp1,-1,axis=1)
 	out += np.fmod(tmp2-tmp1,2.*np.pi)
 
-#	L = thetas.shape[0]
-#
-#	for x in range(L):
-#		for y in range(L):
-#			vorticity[x,y] = ( np.fmod(thetas[(x+1)%L,y] - thetas[x,y],2.*np.pi) 
-#				+np.fmod(thetas[(x+1)%L,(y+1)%L] - thetas[(x+1)%L,y],2.*np.pi) 
-#				+np.fmod(thetas[x,(y+1)%L] - thetas[(x+1)%L,(y+1)%L],2.*np.pi) 
-#				+np.fmod(thetas[x,y] - thetas[x,(y+1)%L],2.*np.pi) )
+	return out
+
+### Given a simulation run this will compute the NV magnetic field for the given distances 
+"""
+def NV_field(thetas,z_list):
+
+	### First we extract how many z points we will be computing for 
+	num_zs = len(z_list)
+
+	### Now we extract the relevant array shapes
+	nsamples = thetas.shape[0] ### Number of samples in passed theta array
+	ntimes = thetas.shape[1] ### Number of time points in each array
+	L = thetas.shape[2] ### Size of system
+
+	### First we need the vorticity profile for each sample and time point
+	vort = np.vectorize(calc_vort)(thetas.reshape(nsamples*nt,L,L)) ### we vectorize by flattening on the first axis	
+
+
+	vorticity = np.fft.fft2(thetas)
+
+	### We will need FFT only once for all z points
+	### We compute here 
+	### We compute the real fft but insist it have the same output shape as the input array, for convenience
+	ffts = np.fft.fft2(vorticity,axes=(-1,-2))
+
+	### We also need the corresponding momentum space points to compute the filters 
+	### This also is needed only once for all z points
+	qs = np.linspace(0.,2.*np.pi,L)
+
+	### Now we compute the filter functions, which has one for each z point we want 
+	filter_funcs = np.zeros((num_zs,L,L))
+
+	### Output array for filtered FFT at each distance z in the list 
+	out = np.zeros((num_ts,num_zs),dtype=complex)
+
+	for nt in range(num_ts):
+		for nz in range(num_zs):
+			z = z_list[nz]
+
+			for nx in range(L):
+				for ny in range(L):
+					q = np.sqrt(qs[nx]**2 + qs[ny]**2)
+				
+					filter_funcs[nz,nx,ny] = np.exp(-2.*z*q)/(2.*q + .00001)**2 ### For q -> 0 we shift slightly, it should be ultimately suppressed anyways
+
+			### We now need to sum over all the momenta to reduce the output down to just the distance-dependent time-dependent field 
+			### We use the mean so that we essentially normalize by the number of momentum points -- I think this will correspond to the integral in continuum
+			out[nt,nz] = np.mean(ffts[nt,:,:]*filter_funcs[nz,:,:])
 
 	return out
 
+
+"""
 
 #######################################
 ### HERE IS A SET OF FUNCTIONS FOR PROCESSING VORTICITY PROFILES FROM C++ SIMULATIONS
@@ -180,20 +223,26 @@ def process_files():
 def main():
 
 	L = 30
-	T = 0.7
-	nburn = 3000
-	nsample = 2000
-	ntimes = 1000 
+	T = 3.7
+	nburn = 100
+	nsample = 1000
+	ntimes = 200 
 	
 	t0 = time.time()
 
-	thetas = run_sim(L,T,nburn,nsample,ntimes)
+	thetas, vorts = run_sim(L,T,nburn,nsample,ntimes)
 	op_correlation = np.zeros(ntimes,dtype=complex)
+	vort_correlation = np.zeros((L,L))
 
 	for n in range(nsample):
 		op_correlation += np.exp(1.j*(thetas[n,:,0,0]-thetas[n,0,0,0]))/float(nsample)
+		vort_correlation += vorts[n,0,:,:]**2/float(nsample)
+
 
 	plt.plot(np.abs(op_correlation))
+	plt.show()
+	plt.imshow(vort_correlation[:,:])
+	plt.colorbar()
 	plt.show()
 
 		
