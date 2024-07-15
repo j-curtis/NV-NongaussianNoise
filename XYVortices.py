@@ -123,16 +123,11 @@ def NV_field(vorticity,z_list):
 	### We compute the fft but insist it have the same output shape as the input array, for convenience
 	ffts = np.fft.fft2(vorticity,axes=(-1,-2))
 
-	### We also need the corresponding momentum space points to compute the filters 
-	### This also is needed only once for all z points
-	qs = np.linspace(0.,2.*np.pi,L)
-
-	### Now we compute the filter functions, which has one for each z point we want 
-	filter_funcs = np.exp(-z_list[:]*np.sqrt( np.outer(np.ones_like(qs),qs**2) + np.outer(qs**2,np.ones_like(qs)) ))/(2.*np.sqrt(0.00001+ np.outer(np.ones_like(qs),qs**2) + np.outer(qs**2,np.ones_like(qs)) ))
+	nv_masks = gen_NV_mask(L,nzs)
 
 	out = np.zeros((nsamples,ntimes,nzs),dtype=complex)
 
-	out = np.mean(ffts * filter_funcs,axes=(-1,-2))
+	out = np.sum(ffts * filter_funcs,axes=(-1,-2))
 
 	return out
 
@@ -231,34 +226,20 @@ def main():
 	nsample = 1000
 	ntimes = 200 
 	
-	z_list = np.array([1.,3.,10.,30.,100.,300.])
-
-	nv_masks = np.real(gen_NV_mask(L,z_list))
-
-	print(nv_masks.shape)
-
-	for n in range(len(z_list)):
-		plt.imshow(np.log(nv_masks[n,:,:]))
-		plt.colorbar()
-		plt.show()
-
-	quit()
-
 	t0 = time.time()
 
 	thetas, vorts = run_sim(L,T,nburn,nsample,ntimes)
 	op_correlation = np.zeros(ntimes,dtype=complex)
-	vort_correlation = np.zeros((L,L))
+	vort_correlation = np.zeros(ntimes)
 
 	for n in range(nsample):
 		op_correlation += np.exp(1.j*(thetas[n,:,0,0]-thetas[n,0,0,0]))/float(nsample)
-		vort_correlation += vorts[n,0,:,:]**2/float(nsample)
+		vort_correlation += vorts[n,0,0,0]*vorts[n,:,0,0]/float(nsample)
 
 
 	plt.plot(np.abs(op_correlation))
 	plt.show()
-	plt.imshow(vort_correlation[:,:])
-	plt.colorbar()
+	plt.plot(vort_correlation)
 	plt.show()
 
 		
