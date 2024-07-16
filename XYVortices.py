@@ -81,7 +81,6 @@ def run_sim(L,T,nburn,nsample,ntimes,J=1.,dt=0.1):
 
 	return out, vort_out
 
-
 #######################################
 ### THESE METHODS ARE FOR PROCESSING VORTICITY DATA AND ARE SUITABLE FOR BOTH PYTHON OR C++ OUTPUTS 
 #######################################
@@ -110,6 +109,8 @@ def gen_NV_mask(L,z_list):
 	return NV_masks
 
 ### Given a simulation of the vorticity dynamics this will compute the NV magnetic field for the given distances 
+### Object out has shape nsamples x ntimes x nzs 
+### Corresponds to a set of nsamples independent samples of trajectories of magnetic field at distance z_list[nzs] for ntimes
 def NV_field(vorticity,z_list):
 	### First we extract how many z points we will be computing for 
 	nzs = len(z_list)
@@ -123,11 +124,15 @@ def NV_field(vorticity,z_list):
 	### We compute the fft but insist it have the same output shape as the input array, for convenience
 	ffts = np.fft.fft2(vorticity,axes=(-1,-2))
 
-	nv_masks = gen_NV_mask(L,nzs)
+	nv_masks = gen_NV_mask(L,z_list)
 
 	out = np.zeros((nsamples,ntimes,nzs),dtype=complex)
 
-	out = np.sum(ffts * filter_funcs,axes=(-1,-2))
+	### OUTPUT IS NOT REAL -- PROBABLY ISSUE WITH FFT CONVENTION
+
+	### Should it be sum or mean?
+	#out = np.sum(ffts * filter_funcs,axes=(-1,-2))
+	out = np.tensordot(ffts , nv_masks,axes=([-1,-2],[-1,-2]))
 
 	return out
 
@@ -226,25 +231,24 @@ def main():
 	nsample = 1000
 	ntimes = 200 
 	
+	z_list = np.array([1.,3.,5.,10.])
+
 	t0 = time.time()
 
 	thetas, vorts = run_sim(L,T,nburn,nsample,ntimes)
+
 	op_correlation = np.zeros(ntimes,dtype=complex)
 	vort_correlation = np.zeros(ntimes)
 
-	for n in range(nsample):
-		op_correlation += np.exp(1.j*(thetas[n,:,0,0]-thetas[n,0,0,0]))/float(nsample)
-		vort_correlation += vorts[n,0,0,0]*vorts[n,:,0,0]/float(nsample)
-
-
-	plt.plot(np.abs(op_correlation))
-	plt.show()
-	plt.plot(vort_correlation)
-	plt.show()
-
+	bfields = NV_field(vorts,z_list)
 		
 	t1 = time.time()
 	print(t1-t0,"s")
+
+	plt.plot(np.imag(bfields[0,:,0]))
+	plt.show()
+
+
 
 if __name__ == "__main__":
 	main()
