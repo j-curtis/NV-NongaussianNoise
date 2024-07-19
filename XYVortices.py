@@ -126,19 +126,56 @@ def NV_field(vorticity,z_list):
 	### We compute the fft but insist it have the same output shape as the input array, for convenience
 	ffts = np.fft.fft2(vorticity,axes=(-1,-2))
 
-	print(ffts.shape)
-
 	nv_masks = gen_NV_mask(L,z_list)
 
 	out = np.zeros((nsamples,ntimes,nzs),dtype=complex)
 
-	### OUTPUT IS NOT REAL -- PROBABLY ISSUE WITH FFT CONVENTION
-
 	### Should it be sum or mean?
 	#out = np.sum(ffts * filter_funcs,axes=(-1,-2))
-	out = np.tensordot(ffts , nv_masks,axes=([-1,-2],[-1,-2]))
+	out = np.real( np.tensordot(ffts , nv_masks,axes=([-1,-2],[-1,-2])) )### We return real value, having confirmed it is indeed real
 
 	return out
+
+
+### Given an ensemble of field measurements for different times and distances this method will compute the relevant moments
+### We compute for a number of different evolution times given in t_lists
+### These can be up to half the total sample time 
+def NV_moments(vorticity,z_list,time_lists):
+	### We first process the field to obtain the ensemble of magnetic fields B_z(z,t)
+	b_fields = NV_field(vorticity,z_list)
+
+	print(b_fields.shape)
+
+	### We extract the shape parameters 
+	nsamples = b_fields.shape[0]
+	total_times = b_fields.shape[1]
+	nzs = b_fields.shape[2]
+
+	### Now we compute the time integrals 
+	### How many time intervals we compute for
+	nts = len(time_lists)
+
+	### For the second moment we only need int_0^T B(t)dt for each T in time_lists
+	### For the fourth-moment we also need int_T^2T B(t)dt for each T in time_lists 
+
+	phases = np.zeros((nsamples,2,nts,nzs)) 
+	### The first entry is phase acquired during first evolution [0,T]
+	### Second entry is phase acquired during second evolution [T,2T]
+	### Each has nsamples
+	### Repeated for nts and nzs 
+
+	for j in range(nts):
+		t_ramsey = time_lists[j]
+		phases[:,0,j,:] = np.mean(b_fields[:,:t_ramsey,:],axis=1)
+		phases[:,1,j,:] = np.mean(b_fields[:,t_ramsey:(2*t_ramsey),:],axis=1)
+
+	### Now we have the relevant time-integrals we compute the relevant moments
+
+	second_moment = np.var(phases[:,0,:,:],axis=0)
+
+	return second_moment
+
+
 
 
 #######################################
@@ -236,21 +273,22 @@ def main():
 	ntimes = 200 
 	
 	z_list = np.array([1.,3.,5.,10.])
+	t_list = np.array([20,40,60,80])
 
 	t0 = time.time()
 
 	thetas, vorts = run_sim(L,T,nburn,nsample,ntimes)
 
-	op_correlation = np.zeros(ntimes,dtype=complex)
-	vort_correlation = np.zeros(ntimes)
-
-	bfields = NV_field(vorts,z_list)
+	second_moment = NV_moments(vorts,z_list,t_list)
 		
 	t1 = time.time()
 	print(t1-t0,"s")
+	for j in range(len(z_list)):
 
-	plt.plot(np.real(bfields[0,:,0]),color='red')
-	plt.plot(np.imag(bfields[0,:,0]),color='blue')
+		plt.plot(second_moment[:,j])
+		plt.xscale('log')
+		plt.yscale('log')
+	
 	plt.show()
 
 
