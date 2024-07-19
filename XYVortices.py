@@ -93,7 +93,9 @@ def gen_NV_mask(L,z_list):
 	nzs = len(z_list)
 
 	### We also need the corresponding momentum space points to compute the filters 
-	q_list = np.linspace(0.,2.*np.pi,L)
+	### These are not lattice momenta and therefore need to range from -pi/L to pi/L 
+	### This method automatically generates the relevant momenta given the size of array, but we need to still weight by pi since the frequencies here are 0, 1/L, 2/L, ... 
+	q_list = np.pi*np.fft.fftfreq(L)
 
 	qx = np.outer(q_list,np.ones(L))
 	qy = np.outer(np.ones(L),q_list)
@@ -102,7 +104,7 @@ def gen_NV_mask(L,z_list):
 
 	### Now we compute the filter functions, which has one for each z point we want 
 	NV_masks = np.zeros((nzs,L,L),dtype=complex)
-	NV_masks = np.exp(-np.tensordot(z_list, q, axes=-1) )/(2.*np.tensordot(np.ones(nzs), q,axes=-1))
+	NV_masks = np.exp(-np.tensordot(z_list, q, axes=0) )/(2.*np.tensordot(np.ones(nzs), q,axes=0))
 	NV_masks[:,0,0] = 0.
 
 
@@ -123,6 +125,8 @@ def NV_field(vorticity,z_list):
 	### We will need FFT only once for all z points but for each sample and time step
 	### We compute the fft but insist it have the same output shape as the input array, for convenience
 	ffts = np.fft.fft2(vorticity,axes=(-1,-2))
+
+	print(ffts.shape)
 
 	nv_masks = gen_NV_mask(L,z_list)
 
@@ -245,7 +249,8 @@ def main():
 	t1 = time.time()
 	print(t1-t0,"s")
 
-	plt.plot(np.imag(bfields[0,:,0]))
+	plt.plot(np.real(bfields[0,:,0]),color='red')
+	plt.plot(np.imag(bfields[0,:,0]),color='blue')
 	plt.show()
 
 
