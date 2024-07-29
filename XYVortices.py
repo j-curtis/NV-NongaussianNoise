@@ -3,6 +3,7 @@
 ### 06/26/2024
 
 import numpy as np
+from scipy import stats as sts
 from matplotlib import pyplot as plt 
 import time 
 
@@ -158,23 +159,39 @@ def NV_moments(vorticity,z_list,time_lists):
 	### For the second moment we only need int_0^T B(t)dt for each T in time_lists
 	### For the fourth-moment we also need int_T^2T B(t)dt for each T in time_lists 
 
-	phases = np.zeros((nsamples,2,nts,nzs)) 
-	### The first entry is phase acquired during first evolution [0,T]
-	### Second entry is phase acquired during second evolution [T,2T]
-	### Each has nsamples
-	### Repeated for nts and nzs 
+	### For now we will implement this via a naive loop over z and t points
+	### Presumably these arrays will not be quite as large 
+	### It will be good in the future to parallelize this 
 
-	for j in range(nts):
-		t_ramsey = time_lists[j]
-		phases[:,0,j,:] = np.mean(b_fields[:,:t_ramsey,:],axis=1)
-		phases[:,1,j,:] = np.mean(b_fields[:,t_ramsey:(2*t_ramsey),:],axis=1)
+	### This will store all the possible moments up to 4th order
+	### For two variables we should have in principle 2^k moments at order k 
+	### We therefore have 2 + 4 + 8 + 16 = 30 entries 
+	### In general this would be 2^(n+1) - 2 = 2(2^n - 1) for nth moment
+	### Many moments should in principle be equal but may have sampling error we will want to average out 
+	moments = np.zeros((30,nzs,nts))
 
-	### Now we have the relevant time-integrals we compute the relevant moments
+	for i in range(nzs):
+		for j in range(nts):
+			t_ramsey = time_lists[j] ### This is the time-point in the evolution the pi pulse is applied
+			X = np.zeros((2,nsamples)) ### we will have X_ns = [A_ns,B_ns]
+			X[0,:] = np.mean(b_fields[:,:t_ramsey,i],axis=1) ### Phase acquired over [0,T_j] for distance z_j
+			X[1,:] = np.mean(b_fields[:,t_ramsey:(2*t_ramsey),i],axis=1) ### Phase acquired over [T_j,2T_j] for distance z_i
 
-	second_moment = np.var(phases[:,0,:,:],axis=0)
+			### Now we compute the first few moments of the variables A,B
+			moment1 = sts.moment(X,order=1,axis=-1,center=0.)
+			moment2 = sts.moment(X,order=2,axis=-1,center=0.)
+			moment3 = sts.moment(X,order=3,axis=-1,center=0.)
+			moment4 = sts.moment(X,order=4,axis=-1,center=0.)
+			print(moment1.shape)
+			print(moment2.shape)
+			print(moment3.shape)
+			print(moment4.shape)
 
-	return second_moment
 
+
+
+
+	return None
 
 
 
