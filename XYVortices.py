@@ -145,8 +145,6 @@ def NV_moments(vorticity,z_list,time_lists):
 	### We first process the field to obtain the ensemble of magnetic fields B_z(z,t)
 	b_fields = NV_field(vorticity,z_list)
 
-	print(b_fields.shape)
-
 	### We extract the shape parameters 
 	nsamples = b_fields.shape[0]
 	total_times = b_fields.shape[1]
@@ -156,19 +154,15 @@ def NV_moments(vorticity,z_list,time_lists):
 	### How many time intervals we compute for
 	nts = len(time_lists)
 
-	### For the second moment we only need int_0^T B(t)dt for each T in time_lists
-	### For the fourth-moment we also need int_T^2T B(t)dt for each T in time_lists 
-
 	### For now we will implement this via a naive loop over z and t points
 	### Presumably these arrays will not be quite as large 
 	### It will be good in the future to parallelize this 
 
-	### This will store all the possible moments up to 4th order
-	### For two variables we should have in principle 2^k moments at order k 
-	### We therefore have 2 + 4 + 8 + 16 = 30 entries 
-	### In general this would be 2^(n+1) - 2 = 2(2^n - 1) for nth moment
-	### Many moments should in principle be equal but may have sampling error we will want to average out 
-	moments = np.zeros((30,nzs,nts))
+	### We compute the moments up to fourth order
+	### We assume odd moments vanish ---- this should be relaxed and controlled for but at the moment it is hard to extract all moments
+
+	### For the time being we extract only the average, full covariance matrix, and the covariance matrix of X^2 , Y^2 at fourth order
+	moments = [np.zeros((2,nts,nzs)),np.zeros((2,2,nts,nzs)),np.zeros((2,2,nts,nzs))]
 
 	for i in range(nzs):
 		for j in range(nts):
@@ -177,21 +171,13 @@ def NV_moments(vorticity,z_list,time_lists):
 			X[0,:] = np.mean(b_fields[:,:t_ramsey,i],axis=1) ### Phase acquired over [0,T_j] for distance z_j
 			X[1,:] = np.mean(b_fields[:,t_ramsey:(2*t_ramsey),i],axis=1) ### Phase acquired over [T_j,2T_j] for distance z_i
 
-			### Now we compute the first few moments of the variables A,B
-			moment1 = sts.moment(X,order=1,axis=-1,center=0.)
-			moment2 = sts.moment(X,order=2,axis=-1,center=0.)
-			moment3 = sts.moment(X,order=3,axis=-1,center=0.)
-			moment4 = sts.moment(X,order=4,axis=-1,center=0.)
-			print(moment1.shape)
-			print(moment2.shape)
-			print(moment3.shape)
-			print(moment4.shape)
+			moments[0][:,j,i] = np.mean(X,axis=1)
+			for a in range(2):
+				for b in range(2):
+					moments[1][a,b,j,i] = np.mean(X[a,:]*X[b,:])
+					moments[2][a,b,j,i] = np.mean(X[a,:]*X[a,:]*X[b,:]*X[b,:])
 
-
-
-
-
-	return None
+	return moments
 
 
 
@@ -296,18 +282,47 @@ def main():
 
 	thetas, vorts = run_sim(L,T,nburn,nsample,ntimes)
 
-	second_moment = NV_moments(vorts,z_list,t_list)
-		
+	moments = NV_moments(vorts,z_list,t_list)
+
 	t1 = time.time()
 	print(t1-t0,"s")
+
 	for j in range(len(z_list)):
 
-		plt.plot(second_moment[:,j])
+		plt.plot(moments[0][0,:,j])
+		plt.plot(moments[0][1,:,j])
+
+	
+	plt.show()
+
+	for j in range(len(z_list)):
+
+		plt.plot(moments[1][0,0,:,j])
+		plt.plot(moments[1][0,1,:,j])
+		plt.plot(moments[1][1,0,:,j])
+		plt.plot(moments[1][1,1,:,j])
 		plt.xscale('log')
 		plt.yscale('log')
 	
 	plt.show()
 
+	for j in range(len(z_list)):
+
+		plt.plot(moments[2][0,0,:,j])
+		plt.plot(moments[2][0,1,:,j])
+		plt.plot(moments[2][1,0,:,j])
+		plt.plot(moments[2][1,1,:,j])
+		plt.xscale('log')
+		plt.yscale('log')
+	
+	plt.show()
+
+	### Should plot cross conencted fourth moment
+	### Clearly the mean is 
+	for j in range(len(z_list)):
+		plt.plot(moments[2][0,1,:,j] - 2.*moments[1][0,1,:,j]**2 - moments[1][0,0,:,j]*moments[1][1,1,:,j]**2)
+
+	plt.show()
 
 
 if __name__ == "__main__":
