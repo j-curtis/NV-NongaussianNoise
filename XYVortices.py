@@ -138,6 +138,39 @@ def NV_field(vorticity,z_list):
 	return out
 
 
+### This computes up to fourth order multivariate moments of variable X[a,nsamples] = [X[0,nsamples].X[1,nsamples]] 
+def calc_moments(X):
+	out = [np.zeros(2),np.zeros((2,2)),np.zeros((2,2,2)),np.zeros((2,2,2,2))]
+
+	for j in range(2):
+		out[0][j] = np.mean(X[j,:])
+
+		for k in range(2):
+			out[1][j,k] = np.mean(X[j,:]*X[k,:])
+
+			for l in range(2):
+				out[2][j,k,l] = np.mean(X[j,:]*X[k,:]*X[l,:])
+
+				for m in range(2):
+					out[3][j,k,l,m] = np.mean(X[j,:]*X[k,:]*X[l,:]*X[m,:])
+
+	return out
+
+
+### This computes the cumulants given the raw moments 
+### Assumes of the form X = [ moment1[2], moment2[2,2], ...]
+def calc_cumulants(X):
+	out = [ np.zeros(2),np.zeros((2,2)),np.zeros((2,2,2)),np.zeros((2,2,2,2))]
+
+	out[0][:] = X[0][:] ### Mean
+	out[1][:,:] = X[1][:,:] - np.outer(X[0][:],X[0][:,:]) ### Second cumulant
+	out[2][:,:,:] = X[2][:,:,:] - 6.*np.outer(X[0][:],X[1][:,:]) + np.outer(X[0][:],np.outer( X[0][:],X[0][:] ) )  ### Third cumulant
+
+	out[3][:,:,:,:] = X[3][:,:,:,:] - 4.* np.outer(X[0][:],X[2][:,:,:]) + 6.* np.outer( np.outer(X[0][:],X[0][:]), X[1][:,:] ) - 3.*np.outer(X[0][:],np.outer(X[0][:],X[0][:]))
+	out[3][:,:,:,:] += -3.*np.outer(out[1],out[1]) ### The fourth cumulant is not the same as the fourth centered moment and has an additional contribution from covariance squared
+
+	return out
+
 ### Given an ensemble of field measurements for different times and distances this method will compute the relevant moments
 ### We compute for a number of different evolution times given in t_lists
 ### These can be up to half the total sample time 
@@ -162,7 +195,7 @@ def NV_moments(vorticity,z_list,time_lists):
 	### We assume odd moments vanish ---- this should be relaxed and controlled for but at the moment it is hard to extract all moments
 
 	### For the time being we extract only the average, full covariance matrix, and the covariance matrix of X^2 , Y^2 at fourth order
-	moments = [np.zeros((2,nts,nzs)),np.zeros((2,2,nts,nzs)),np.zeros((2,2,nts,nzs))]
+	moments = [np.zeros((2,nts,nzs)),np.zeros((2,2,nts,nzs)),np.zeros((2,2,2,nts,nzs)),np.zeros((2,2,2,2,nts,nzs))]
 
 	for i in range(nzs):
 		for j in range(nts):
@@ -171,14 +204,55 @@ def NV_moments(vorticity,z_list,time_lists):
 			X[0,:] = np.mean(b_fields[:,:t_ramsey,i],axis=1) ### Phase acquired over [0,T_j] for distance z_j
 			X[1,:] = np.mean(b_fields[:,t_ramsey:(2*t_ramsey),i],axis=1) ### Phase acquired over [T_j,2T_j] for distance z_i
 
-			moments[0][:,j,i] = np.mean(X,axis=1)
-			for a in range(2):
-				for b in range(2):
-					moments[1][a,b,j,i] = np.mean(X[a,:]*X[b,:])
-					moments[2][a,b,j,i] = np.mean(X[a,:]*X[a,:]*X[b,:]*X[b,:])
+			M = calc_moments(X)
+			#for a in range(2):
+			#	for b in range(2):
+			#		moments[1][a,b,j,i] = np.mean(X[a,:]*X[b,:])
+			#		moments[2][a,b,j,i] = np.mean(X[a,:]*X[a,:]*X[b,:]*X[b,:])
+
+			for a in range(4):
+					moments[a][...,j,i] = M[a][...]
 
 	return moments
 
+### Same as NV_moments but returns the cumulants instead
+def NV_cumulants(vorticity,z_list,time_lists):
+	### We first process the field to obtain the ensemble of magnetic fields B_z(z,t)
+	b_fields = NV_field(vorticity,z_list)
+
+	### We extract the shape parameters 
+	nsamples = b_fields.shape[0]
+	total_times = b_fields.shape[1]
+	nzs = b_fields.shape[2]
+
+	### Now we compute the time integrals 
+	### How many time intervals we compute for
+	nts = len(time_lists)
+
+	### For now we will implement this via a naive loop over z and t points
+	### Presumably these arrays will not be quite as large 
+	### It will be good in the future to parallelize this 
+
+	### We compute the moments up to fourth order
+	### We assume odd moments vanish ---- this should be relaxed and controlled for but at the moment it is hard to extract all moments
+
+	### For the time being we extract only the average, full covariance matrix, and the covariance matrix of X^2 , Y^2 at fourth order
+	cumulants = [np.zeros((2,nts,nzs)),np.zeros((2,2,nts,nzs)),np.zeros((2,2,2,nts,nzs)),np.zeros((2,2,2,2,nts,nzs))]
+
+	for i in range(nzs):
+		for j in range(nts):
+			t_ramsey = time_lists[j] ### This is the time-point in the evolution the pi pulse is applied
+			X = np.zeros((2,nsamples)) ### we will have X_ns = [A_ns,B_ns]
+			X[0,:] = np.mean(b_fields[:,:t_ramsey,i],axis=1) ### Phase acquired over [0,T_j] for distance z_j
+			X[1,:] = np.mean(b_fields[:,t_ramsey:(2*t_ramsey),i],axis=1) ### Phase acquired over [T_j,2T_j] for distance z_i
+
+			M = calc_moments(X)
+			C = calc_cumulants(M)
+
+			for a in range(4):
+					cumulants[a][...,j,i] = C[a][...]
+
+	return cumulants
 
 
 #######################################
@@ -271,58 +345,68 @@ def main():
 
 	L = 30
 	T = 3.7
-	nburn = 100
+	nburn = 200
 	nsample = 1000
-	ntimes = 200 
+	ntimes = 300 
 	
-	z_list = np.array([1.,3.,5.,10.])
-	t_list = np.array([20,40,60,80])
+	z_list = np.array([1.,3.,5.,10.,30.])
+	t_list = np.array([5,10,20,40,60,80,100])
 
 	t0 = time.time()
 
 	thetas, vorts = run_sim(L,T,nburn,nsample,ntimes)
 
-	moments = NV_moments(vorts,z_list,t_list)
+	cumulants = NV_moments(vorts,z_list,t_list)
 
 	t1 = time.time()
 	print(t1-t0,"s")
 
-	for j in range(len(z_list)):
 
-		plt.plot(moments[0][0,:,j])
-		plt.plot(moments[0][1,:,j])
+	### Mean magnetic field (should be close to zero)
+	for i in range(2):
 
-	
-	plt.show()
+		plt.imshow(cumulants[0][i,:,:])
+		plt.title(r'Cumulant: '+str(i))
+		plt.xlabel(r'$z/\xi_c$')
+		plt.ylabel(r'$T_{\rm Ramsey}$')
+		plt.colorbar()
+		plt.show()
 
-	for j in range(len(z_list)):
+	### Magnetic field covariance
+	for i in range(2):
+		for j in range(2):
 
-		plt.plot(moments[1][0,0,:,j])
-		plt.plot(moments[1][0,1,:,j])
-		plt.plot(moments[1][1,0,:,j])
-		plt.plot(moments[1][1,1,:,j])
-		plt.xscale('log')
-		plt.yscale('log')
-	
-	plt.show()
+			plt.imshow(cumulants[1][i,j,:,])
+			plt.title(r'Cumulant: '+str(i)+", "+str(j))
+			plt.xlabel(r'$z/\xi_c$')
+			plt.ylabel(r'$T_{\rm Ramsey}$')
+			plt.colorbar()
+			plt.show()
 
-	for j in range(len(z_list)):
+	### Magnetic field skewness
+	for i in range(2):
+		for j in range(2):
+			for k in range(2):
 
-		plt.plot(moments[2][0,0,:,j])
-		plt.plot(moments[2][0,1,:,j])
-		plt.plot(moments[2][1,0,:,j])
-		plt.plot(moments[2][1,1,:,j])
-		plt.xscale('log')
-		plt.yscale('log')
-	
-	plt.show()
+				plt.imshow(cumulants[2][i,j,k,:,])
+				plt.title(r'Cumulant: '+str(i)+", "+str(j)+", "+str(k))
+				plt.xlabel(r'$z/\xi_c$')
+				plt.ylabel(r'$T_{\rm Ramsey}$')
+				plt.colorbar()
+				plt.show()
+		
+	### Magnetic field fourth moment 
+	for i in range(2):
+		for j in range(2):
+			for k in range(2):
+				for l in range(2):
 
-	### Should plot cross conencted fourth moment
-	### Clearly the mean is 
-	for j in range(len(z_list)):
-		plt.plot(moments[2][0,1,:,j] - 2.*moments[1][0,1,:,j]**2 - moments[1][0,0,:,j]*moments[1][1,1,:,j]**2)
-
-	plt.show()
+					plt.imshow(cumulants[3][i,j,k,l,:,])
+					plt.title(r'Cumulant: '+str(i)+", "+str(j)+", "+str(k)+", "+str(l))
+					plt.xlabel(r'$z/\xi_c$')
+					plt.ylabel(r'$T_{\rm Ramsey}$')
+					plt.colorbar()
+					plt.show()
 
 
 if __name__ == "__main__":
