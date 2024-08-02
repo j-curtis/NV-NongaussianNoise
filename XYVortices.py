@@ -87,7 +87,6 @@ def run_sim(L,T,nburn,nsample,ntimes,J=1.,dt=0.1):
 #######################################
 
 ### This method generates the NV filter function for the passed list of distances 
-
 def gen_NV_mask(L,z_list):
 
 	### First we extract how many z points we will be computing for 
@@ -137,7 +136,6 @@ def NV_field(vorticity,z_list):
 
 	return out
 
-
 ### This computes up to fourth order multivariate moments of variable X[a,nsamples] = [X[0,nsamples].X[1,nsamples]] 
 def calc_moments(X):
 	out = [np.zeros(2),np.zeros((2,2)),np.zeros((2,2,2)),np.zeros((2,2,2,2))]
@@ -155,7 +153,6 @@ def calc_moments(X):
 					out[3][j,k,l,m] = np.mean(X[j,:]*X[k,:]*X[l,:]*X[m,:])
 
 	return out
-
 
 ### This computes the cumulants given the raw moments 
 ### Assumes of the form X = [ moment1[2], moment2[2,2], ...]
@@ -253,7 +250,6 @@ def NV_cumulants(vorticity,z_list,time_lists):
 					cumulants[a][...,j,i] = C[a][...]
 
 	return cumulants
-
 
 #######################################
 ### HERE IS A SET OF FUNCTIONS FOR PROCESSING VORTICITY PROFILES FROM C++ SIMULATIONS
