@@ -6,6 +6,7 @@ import numpy as np
 from scipy import stats as sts
 from matplotlib import pyplot as plt 
 import time 
+import datetime
 
 #######################################
 ### THESE METHODS ARE FOR RUNNING SIMULATION IN PYTHON
@@ -267,7 +268,6 @@ def load_csv(fname):
 
 	return data
 
-
 ### This method will take the spatial vorticity profile and compute the filtered FFT at a depth z (accepts an array of distances z)
 ### vorticity is assumed to be an NtxLxL array of all time slices 
 def fft_filtered(vorticity,z_list):
@@ -309,7 +309,6 @@ def fft_filtered(vorticity,z_list):
 
 	return out
 
-
 def process_files():
 
 	t0 = time.time()
@@ -337,25 +336,143 @@ def process_files():
 	print("Total time: ",tf-t0,"s")
 
 
+#######################################
+### THIS CLASS WILL WRAP THE SIMULATION WITH I/O TO FACILITATE SYSTEMATIC STUDY
+#######################################
+
+### We will assume the run file is formatted as the following:
+"""
+data_directory = <RELATIVE PATH TO DIRECTORY TO STORE DATA>
+save_thetas = <bool>
+save_vorticty = <bool>
+save_cumulants = <bool>
+save_meta = <bool> 
+L = <int>
+T = <float>
+nburn = <int>
+nsample = <int>
+ntimes = <int>
+z_list = <float list, white space separated>
+t_list = <int list, white space separated> 
+""" 
+
+class run_from_file:
+	### This method will read in all the appropriate inputs and organize them into attributes
+	def __init__(self,run_file_name):
+		self.run_file_name = run_file_name
+
+		with open(self.run_file_name,"r") as f:
+			lines = f.readlines()
+
+			### Now we parse each line
+			self.data_directory = lines[0]
+
+			self.save_thetas = bool(lines[1])
+			self.save_vorticity = bool(lines[2])
+			self.save_cumulants = bool(lines[3])
+			self.save_meta = bool(lines[4])
+
+			self.L = float(lines[5])
+			self.T = int(lines[6])
+			self.nburn = int(lines[7])
+			self.nsample = int(lines[8])
+			self.ntimes = int(lines[9])
+
+			z_list = lines[10]
+			self.z_list = np.array([ float(z) for z in z_list.split(' ') ])
+
+			t_list = lines[11]
+			self.t_list = np.array([ int(t) for t in t_list.split(' ') ])
+
+		### This is where we will put the elapsed times taken to run the simulation and compute the cumulants 
+		self.run_time = 0.
+		self.cumulant_time = 0.
+
+		### It may be useful to timestamp so we also create an attribute to store the time stamp of when the run began
+		self.time_stamp = None
+
+		### How many z and t_ramsey points we compute for 
+		self.nzs = len(self.z_list)
+		self.nts = len(self.t_list)
+
+		### This is where the data will actually be stored 
+		self.thetas = np.zeros((self.nsample,self.ntimes,self.L,self.L))
+		self.vorticity = np.zeros((self.nsample,self.ntimes,self.L,self.L))
+
+		### We store the moments up to fourth order and keep all cross moments which gives 2 + 4 + 8 + 16 = 30 moments 
+		self.cumulants = [np.zeros((2,self.nts,self.nzs)),np.zeros((2,2,self.nts,self.nzs)),np.zeros((2,2,2,self.nts,self.nzs)),np.zeros((2,2,2,2,self.nts,self.nzs))]
+
+	### Calling this method will run the simulation 
+	def run(self):
+		t0 = time.time()
+
+		self.time_stamp = datetime.datetime.now()
+
+		self.thetas, self.vorticity = run_sim(self.L, self.T, self.nburn, self.nsample, self.ntimes)
+
+		t1 = time.time()
+
+		self.run_time = t1 - t0 ### Elapsed time to run simulation
+
+	### Calling this method will compute the cumulants after running the simulation
+	def cumulant(self):
+		t0 = time.time()
+
+		self.cumulants = NV_cumulants(self.vorticity,self.z_list,self.t_list) ### This computes the cumulants and stores them
+
+		t1 = time.time()
+
+		self.cumulant_time = t1 - t0 ### Elapsed time for cumulants 
+
+	### Calling this method will save the data (if indicated)
+	def save_data(self):
+
+		if self.save_thetas:
+			path = self.data_directory + "_thet.npy"
+			np.save(path,self.thetas)
+
+		if self.save_vorticity:
+			path = self.data_directory + "_vort.npy"
+			np.save(path,self.vorticity)
+
+		if self.save_cumulants:
+			for i in range(len(self.cumulants)):
+				### We save each cumulant order to a separate file which is labeled by the cumulant order
+				path = self.data_directory + "_cuml_"+str(i)+".npy"
+				np.save(path,self.cumulants[i])
+
+		if self.save_meta:
+			path = self.data_directory+"_metadata.txt"
+			with open(path,"w") as f:
+				f.write("time_stamp ",str(self.time_stamp),'\n')
+				f.write("run_time ",str(self.run_time),'\n')
+				f.write("cumulant_time ",str(self.cumulant_time),'\n')
+				f.close()
+
+
+
 def main():
 
-	L = 30
+	L = 35
 	T = 3.7
-	nburn = 200
+	nburn = 1000
 	nsample = 1000
-	ntimes = 300 
+	ntimes = 250 
 	
-	z_list = np.array([1.,3.,5.,10.,30.])
-	t_list = np.array([5,10,20,40,60,80,100])
+	z_list = np.array([1.,3.,10.])
+	t_list = np.array([5,10,20,40,80,100])
 
 	t0 = time.time()
 
 	thetas, vorts = run_sim(L,T,nburn,nsample,ntimes)
 
+	t1 = time.time()
+	print("Simulation time: ",t1-t0,"s")
+
 	cumulants = NV_moments(vorts,z_list,t_list)
 
-	t1 = time.time()
-	print(t1-t0,"s")
+	t2 = time.time()
+	print("Cumulant computation time: ",t2-t1,"s")
 
 
 	### Mean magnetic field (should be close to zero)
