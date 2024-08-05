@@ -161,11 +161,11 @@ def calc_cumulants(X):
 	out = [ np.zeros(2),np.zeros((2,2)),np.zeros((2,2,2)),np.zeros((2,2,2,2))]
 
 	out[0][:] = X[0][:] ### Mean
-	out[1][:,:] = X[1][:,:] - np.outer(X[0][:],X[0][:,:]) ### Second cumulant
-	out[2][:,:,:] = X[2][:,:,:] - 6.*np.outer(X[0][:],X[1][:,:]) + np.outer(X[0][:],np.outer( X[0][:],X[0][:] ) )  ### Third cumulant
+	out[1][:,:] = X[1][:,:] - np.tensordot(X[0][:],X[0][:],axes=0) ### Second cumulant
+	out[2][:,:,:] = X[2][:,:,:] - 6.*np.tensordot(X[0][:],X[1][:,:],axes=0) + np.tensordot(X[0][:],np.tensordot( X[0][:],X[0][:],axes=0 ),axes=0 )  ### Third cumulant
 
-	out[3][:,:,:,:] = X[3][:,:,:,:] - 4.* np.outer(X[0][:],X[2][:,:,:]) + 6.* np.outer( np.outer(X[0][:],X[0][:]), X[1][:,:] ) - 3.*np.outer(X[0][:],np.outer(X[0][:],X[0][:]))
-	out[3][:,:,:,:] += -3.*np.outer(out[1],out[1]) ### The fourth cumulant is not the same as the fourth centered moment and has an additional contribution from covariance squared
+	out[3][:,:,:,:] = X[3][:,:,:,:] - 4.* np.tensordot(X[0][:],X[2][:,:,:],axes=0) + 6.* np.tensordot( np.tensordot(X[0][:],X[0][:],axes=0), X[1][:,:] ,axes=0) - 3.*np.tensordot(X[0][:],np.tensordot(X[0][:],X[0][:],axes=0),axes=0)
+	out[3][:,:,:,:] += -3.*np.tensordot(out[1],out[1],axes=0) ### The fourth cumulant is not the same as the fourth centered moment and has an additional contribution from covariance squared
 
 	return out
 
@@ -343,6 +343,7 @@ def process_files():
 ### We will assume the run file is formatted as the following:
 """
 data_directory = <RELATIVE PATH TO DIRECTORY TO STORE DATA>
+run_name = <STRING IDENTIFIER FOR SUB RUN>
 save_thetas = <bool>
 save_vorticty = <bool>
 save_cumulants = <bool>
@@ -352,8 +353,8 @@ T = <float>
 nburn = <int>
 nsample = <int>
 ntimes = <int>
-z_list = <float list, white space separated>
-t_list = <int list, white space separated> 
+z_list = <float list, comma separated>
+t_list = <int list, comma separated> 
 """ 
 
 class run_from_file:
@@ -363,26 +364,27 @@ class run_from_file:
 
 		with open(self.run_file_name,"r") as f:
 			lines = f.readlines()
-
+			### DO THIS WITH A DICTIONARY IN FUTURE
 			### Now we parse each line
-			self.data_directory = lines[0]
+			self.data_directory = ( (lines[0]).split(' ')[-1]).strip('\n')
+			self.run_name = ( (lines[1]).split(' ')[-1]).strip('\n')
 
-			self.save_thetas = bool(lines[1])
-			self.save_vorticity = bool(lines[2])
-			self.save_cumulants = bool(lines[3])
-			self.save_meta = bool(lines[4])
+			self.save_thetas = bool( (lines[2]).split(' ')[-1] )
+			self.save_vorticity = bool( (lines[3]).split(' ')[-1] )
+			self.save_cumulants = bool( (lines[4]).split(' ')[-1] )
+			self.save_meta = bool( (lines[5]).split(' ')[-1] )
 
-			self.L = float(lines[5])
-			self.T = int(lines[6])
-			self.nburn = int(lines[7])
-			self.nsample = int(lines[8])
-			self.ntimes = int(lines[9])
+			self.L = int( (lines[6]).split(' ')[-1] )
+			self.T = float( (lines[7]).split(' ')[-1] )
+			self.nburn = int( (lines[8]).split(' ')[-1] )
+			self.nsample = int( (lines[9]).split(' ')[-1] )
+			self.ntimes = int( (lines[10]).split(' ')[-1] )
 
-			z_list = lines[10]
-			self.z_list = np.array([ float(z) for z in z_list.split(' ') ])
+			z_list = ((lines[11]).split(' ')[-1]).strip('\n')
+			self.z_list = np.array([ int(z) for z in z_list.split(',') ])
 
-			t_list = lines[11]
-			self.t_list = np.array([ int(t) for t in t_list.split(' ') ])
+			t_list = ((lines[12]).split(' ')[-1]).strip('\n')
+			self.t_list = np.array([ int(t) for t in t_list.split(',') ])
 
 		### This is where we will put the elapsed times taken to run the simulation and compute the cumulants 
 		self.run_time = 0.
@@ -418,7 +420,9 @@ class run_from_file:
 	def cumulant(self):
 		t0 = time.time()
 
-		self.cumulants = NV_cumulants(self.vorticity,self.z_list,self.t_list) ### This computes the cumulants and stores them
+		C = NV_cumulants(self.vorticity,self.z_list,self.t_list) ### This computes the cumulants and stores them
+		for i in range(4):
+			self.cumulants[i] = C[i][...]
 
 		t1 = time.time()
 
@@ -428,98 +432,49 @@ class run_from_file:
 	def save_data(self):
 
 		if self.save_thetas:
-			path = self.data_directory + "_thet.npy"
+			path = self.data_directory + self.run_name+"_thet.npy"
 			np.save(path,self.thetas)
 
 		if self.save_vorticity:
-			path = self.data_directory + "_vort.npy"
+			path = self.data_directory+ self.run_name + "_vort.npy"
 			np.save(path,self.vorticity)
 
 		if self.save_cumulants:
 			for i in range(len(self.cumulants)):
 				### We save each cumulant order to a separate file which is labeled by the cumulant order
-				path = self.data_directory + "_cuml_"+str(i)+".npy"
+				path = self.data_directory + self.run_name+"_cuml_"+str(i)+".npy"
 				np.save(path,self.cumulants[i])
 
 		if self.save_meta:
-			path = self.data_directory+"_metadata.txt"
+			path = self.data_directory+self.run_name+"_meta.txt"
 			with open(path,"w") as f:
-				f.write("time_stamp ",str(self.time_stamp),'\n')
-				f.write("run_time ",str(self.run_time),'\n')
-				f.write("cumulant_time ",str(self.cumulant_time),'\n')
+				f.write("data_directory = "+self.data_directory+'\n')
+				f.write("run_name = "+self.run_name+'\n')
+				f.write("save_thetas = "+str(self.save_thetas)+'\n')
+				f.write("save_vorticity = "+str(self.save_vorticity)+'\n')
+				f.write("save_cumulants = "+str(self.save_vorticity)+'\n')
+				f.write("save_meta = "+str(self.save_meta)+'\n')
+				f.write("L = "+str(self.L)+'\n')
+				f.write("T = "+str(self.T)+'\n')
+				f.write("nburn = "+str(self.nburn)+'\n')
+				f.write("nsample = "+str(self.nsample)+'\n')
+				f.write("ntimes = "+str(self.ntimes)+'\n')
+				f.write("z_list = "+(str(self.z_list)[1:-1]).replace(" ",",")+'\n')
+				f.write("t_list = "+(str(self.t_list)[1:-1]).replace(" ",",")+'\n')
+				f.write('\n')
+				f.write("time_stamp = "+str(self.time_stamp)+'\n')
+				f.write("run_time = "+str(self.run_time)+'\n')
+				f.write("cumulant_time = "+str(self.cumulant_time)+'\n')
 				f.close()
-
 
 
 def main():
 
-	L = 35
-	T = 3.7
-	nburn = 1000
-	nsample = 1000
-	ntimes = 250 
-	
-	z_list = np.array([1.,3.,10.])
-	t_list = np.array([5,10,20,40,80,100])
-
-	t0 = time.time()
-
-	thetas, vorts = run_sim(L,T,nburn,nsample,ntimes)
-
-	t1 = time.time()
-	print("Simulation time: ",t1-t0,"s")
-
-	cumulants = NV_moments(vorts,z_list,t_list)
-
-	t2 = time.time()
-	print("Cumulant computation time: ",t2-t1,"s")
-
-
-	### Mean magnetic field (should be close to zero)
-	for i in range(2):
-
-		plt.imshow(cumulants[0][i,:,:])
-		plt.title(r'Cumulant: '+str(i))
-		plt.xlabel(r'$z/\xi_c$')
-		plt.ylabel(r'$T_{\rm Ramsey}$')
-		plt.colorbar()
-		plt.show()
-
-	### Magnetic field covariance
-	for i in range(2):
-		for j in range(2):
-
-			plt.imshow(cumulants[1][i,j,:,])
-			plt.title(r'Cumulant: '+str(i)+", "+str(j))
-			plt.xlabel(r'$z/\xi_c$')
-			plt.ylabel(r'$T_{\rm Ramsey}$')
-			plt.colorbar()
-			plt.show()
-
-	### Magnetic field skewness
-	for i in range(2):
-		for j in range(2):
-			for k in range(2):
-
-				plt.imshow(cumulants[2][i,j,k,:,])
-				plt.title(r'Cumulant: '+str(i)+", "+str(j)+", "+str(k))
-				plt.xlabel(r'$z/\xi_c$')
-				plt.ylabel(r'$T_{\rm Ramsey}$')
-				plt.colorbar()
-				plt.show()
-		
-	### Magnetic field fourth moment 
-	for i in range(2):
-		for j in range(2):
-			for k in range(2):
-				for l in range(2):
-
-					plt.imshow(cumulants[3][i,j,k,l,:,])
-					plt.title(r'Cumulant: '+str(i)+", "+str(j)+", "+str(k)+", "+str(l))
-					plt.xlabel(r'$z/\xi_c$')
-					plt.ylabel(r'$T_{\rm Ramsey}$')
-					plt.colorbar()
-					plt.show()
+	file_path = "../data/08052024/01.txt"
+	run = run_from_file(file_path)
+	run.run()
+	run.cumulant()
+	run.save_data()
 
 
 if __name__ == "__main__":
