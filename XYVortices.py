@@ -470,12 +470,16 @@ class run_from_file:
 
 def main():
 
-	file_path = "../data/08052024/01.txt"
-	run = run_from_file(file_path)
-	run.run()
-	run.cumulant()
-	run.save_data()
+	file_path = "../data/08052024/"
+	file_names = ["{:02d}".format(i) + ".txt" for i in range(1,15)]
+	for file_name in file_names:
+		run_file = file_path + file_name
+		print("Running file: "+run_file)
+		run = run_from_file(run_file)
 
+		run.run()
+		run.cumulant()
+		run.save_data()
 
 if __name__ == "__main__":
 	main()
