@@ -99,7 +99,7 @@ def calc_g2(S,t1,t2):
 
 	matrix = rate_matrix(S)
 
-	kern = linalg.expm((t2-t1)*matrix)
+	kern = linalg.expm(np.abs(t2-t1)*matrix)
 
 	return S_vec@kern@S_vec/float(M) ### This is the two-time spin correlation function
 
@@ -127,7 +127,7 @@ def calc_g4(S,t1,t2,t3,t4):
 	kern3 = linalg.expm(np.abs(t4-t3)*rates)
 
 	
-	return S_vec@kern3@kern2@S_mat@kern1@S_vec/float(M) ### This is the four-time spin correlation function
+	return S_vec@kern3@S_mat@kern2@S_mat@kern1@S_vec/float(M) ### This is the four-time spin correlation function
 
 
 ####################################
@@ -150,7 +150,7 @@ def calc_g4conn(S,t1,t2,t3,t4):
 
 	g2_34 = calc_g2(S,t3,t4)
 
-	return - ( g4 - (g2_12*g2_34 + g2_13*g2_24 + g2_14*g2_23) )
+	return  g4 - (g2_12*g2_34 + g2_13*g2_24 + g2_14*g2_23)
 
 ####################################
 ### Fourth order noise Xcumulant ###
@@ -172,32 +172,28 @@ def calc_Xcumulant(S,T,npts):
 	for i in range(npts):
 		connected_correlations[i] = calc_g4conn(S,tpts[i,0],tpts[i,1],tpts[i,2],tpts[i,3])
 
-	return T**4 * np.mean(connected_correlations)
+	return -T**4 * np.mean(connected_correlations)
 
 
 
 
 def main():
 
-	S = 3.
-	T = 1.
-	npts = 5000
-	xcum = calc_Xcumulant(S,T,npts)
-	print(xcum)
-	quit()
-	
-	S = [ .5,1.,1.5,2.,2.5,3.]
-	dt = 0.05
-	nt = 100
-	times = np.linspace(0.,dt*(nt-1),nt)
+	S = [0.5,1.]
+	nts = 10
+	times = np.linspace(0.,5.,nts)
 
-	g2s = [ calc_g2(s,dt,nt) for s in S ]
+	Nsample = 50000
+
+	nonGaussian = np.zeros((len(S),nts))
 
 	for s in range(len(S)):
-		plt.plot(times,g2s[s])
+		for t in range(nts):
+			nonGaussian[s,t] = calc_Xcumulant(S[s],times[t],Nsample)
 
-	plt.plot(times,np.exp(-2.*times),marker='x')
+		plt.plot(times,nonGaussian[s,:],marker='.',label=r'$S =$'+str(S[s]))
 	plt.yscale('log')
+	plt.legend()
 	plt.show()
 
 
