@@ -29,60 +29,77 @@ def sinc(x):
 		return np.sin(x)/x
 
 
-### This has a maximum at 2q - q^2 = 0 -> q = 2 
-### The integral over q is normalized to int_0^infty dq q^2 e^{-q} = 2 
-def nv_filter(q):
-	return q**2 *np.exp(-np.abs(q)) 
+### This is the integrand eveluated in the saddle-point approximation and Monte Carlo sampling for the frequencies 
+def noise_integral(x,s,N):
+	g = s*(1+4./x**2)
+	prefactor = 64.*np.pi**5 *(1.+4./x**2)*s**6 / g**3
+
+	rng = np.random.default_rng()
+
+	samples = np.zeros(N) ### This will be a list of samples of the integrand 
+
+	for i in range(N):
+		ws = rng.standard_cauchy(3)*g ### Generator N samples of three frequencies, scaled by gamma since this is by default variance unity
+
+		W = sum(ws)
+
+		samples[i] = sinc(ws[0]/2.)*sinc(ws[1]/2.)*sinc(ws[2]/2.)*sinc(W/2.)
+		samples[i] *= 1./3.*( np.cos( ws[0] + ws[1] ) + np.cos( ws[0] + ws[2] ) + np.cos( ws[1] + ws[2] ) )
+		samples[i] *= 1./( (W/s)**2 + (1. + 4./x**2)**2 )
+		samples[i] *= prefactor 
+
+	### From our samples we return the mean and std dev 
+
+	return np.mean(samples)
 
 
-### This is the integrand eveluated in the saddle-point approximation
-### we replace the integrals over the three momenta q1,2,3 with delta functions in the magnitude with |qj| = 2 = |sum_j q_j| .
-### It is still a function of three frequencies 
-def integrand_saddle(w1,w2,w3,x,s):
-	ws = [w1,w2,w3]
-	W = sum(ws)
-	prod = (1. + 4./x**2)/( (W/s)**2 + (1.+4./x**2)**2 )*sinc(W/2.)*1./3.*( np.cos(ws[0]+ws[1]) + np.cos(ws[0]+ws[2]) + np.cos(ws[1]+ws[2]))
+### This will be an optimized sample processor 
+def noise_integral_opt(x,s,N):
+	### First we want to generate a set of samples 
+	g = s*(1+4./x**2)
+	rng = np.random.default_rng()
+	ws = rng.standard_cauchy((N,3))*g ### Generator N samples of three frequencies, scaled by gamma since this is by default variance unity
+	Ws = np.sum(ws,axis=-1)
 
-	for j in range(3):
-		prod *= sinc(ws[j]/2.)/( (ws[j]/s)**2 + (1 + 4/x**2)**2 )
+	sinc_v = np.vectorize(sinc)
 
-	### This is the volume and normalation factor coming from replacing the momentum integrals with delta functions
-	qvol = 1./(2.*np.pi)**6 * (2**4)*(2.*np.pi)**2 ### Check integrals 
+	sincs = np.ones(N)
+	cosines = np.zeros(N)
 
-	return prod * qvol
 
-### Now we integrate over the three frequencies
-### We integrate up to frequencies +- wmax 
-def noise_integral(x,s):
+	for i in range(3):
+		sincs[:] *= sinc_v(ws[:,i]/2.)
+		cosines[:] += 1./3. * ( np.cos(ws[:,i] + ws[:,i-1]) )
 
-	wmax = 30.
-	return intg.tplquad(integrand_saddle,-wmax,wmax, -wmax,wmax,-wmax,wmax,args=(x,s))[0]/(np.pi)**3
+	sincs *= sinc_v(Ws/2.)
+	lorentzian_Ws = 1./( (Ws[:]/s)**2 + (1.+4./x**2)**2 )
+
+
+	samples = 64.*np.pi**5 *(1.+4./x**2)*s**6 / g**3*sincs*lorentzian_Ws*cosines
+
+	return np.mean(samples)
 
 
 def main():
-	xmin = 0.1
-	xmax = 10.
-	nx = 4
-	xs = np.linspace(xmin,xmax,nx)
+	nx = 20
+	xs = np.logspace(-1,2,nx)
+	s = 3.
+	N = int(1e6)
 
-	smin = 0.1
-	smax = 10.
-	ns = 3
-	ss = np.linspace(smin,smax,ns)
-	
-	noises = np.zeros((nx,ns))
+	noise = np.zeros(nx)
 	t0 = time.time()
+
 	for i in range(nx):
 		x = xs[i]
-		for j in range(ns):
-			s = ss[j]
 
-			noises[i,j] = noise_integral(x,s)
+
+		noise[i] = noise_integral_opt(x,s,N)
 
 	t1 = time.time()
 	print(t1-t0,"s")
-	plt.imshow(noise,origin = 'lower',cmap = 'coolwarm')
-	plt.colorbar()
+	plt.plot(xs,noise)
+	plt.xscale('log')
+	#plt.yscale('log')
 	plt.show()
 
 if __name__ == "__main__":
